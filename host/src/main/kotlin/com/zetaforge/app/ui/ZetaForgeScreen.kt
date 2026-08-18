@@ -24,11 +24,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.zetaforge.app.R
@@ -69,6 +76,8 @@ data class HostActions(
     val onLevelChange: (ZetaLogLevel) -> Unit,
     val onClearLogs: () -> Unit,
     val onToggleLogs: () -> Unit,
+    val onQueryChange: (String) -> Unit,
+    val onToggleCard: (PluginEntry) -> Unit,
     val onDismissBanner: () -> Unit,
     val onPermissionPromptResult: (Boolean) -> Unit,
     val onSpecialAccessResult: (Boolean) -> Unit,
@@ -222,23 +231,34 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
         }
 
         item {
+            val visible = state.visiblePlugins
             SectionHeader(
                 title = stringResource(R.string.plugins_title),
-                subtitle = if (state.plugins.isEmpty()) {
-                    stringResource(R.string.plugins_none)
-                } else {
-                    stringResource(R.string.plugins_count, state.plugins.size)
+                subtitle = when {
+                    state.plugins.isEmpty() -> stringResource(R.string.plugins_none)
+                    visible.size != state.plugins.size ->
+                        stringResource(R.string.plugins_filtered_count, visible.size, state.plugins.size)
+
+                    else -> stringResource(R.string.plugins_count, state.plugins.size)
                 },
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             )
         }
 
-        if (state.plugins.isEmpty()) {
-            item { EmptyState() }
-        } else {
-            items(state.plugins, key = { it.id }) { entry ->
+        // The search box only earns its place once there is something to sift.
+        if (state.plugins.size > 1 || state.query.isNotEmpty()) {
+            item { SearchField(state.query, actions.onQueryChange) }
+        }
+
+        val visible = state.visiblePlugins
+        when {
+            state.plugins.isEmpty() -> item { EmptyState() }
+            visible.isEmpty() -> item { NoMatchState(state.query) }
+            else -> items(visible, key = { it.id }) { entry ->
                 PluginCard(
                     entry = entry,
+                    expanded = state.isExpanded(entry.id),
+                    onToggleExpanded = { actions.onToggleCard(entry) },
                     onStart = { actions.onStart(entry) },
                     onDetails = { actions.onDetails(entry) },
                     onViewCode = { actions.onViewCode(entry) },
@@ -307,6 +327,67 @@ private fun HeaderCard(state: HostUiState, actions: HostActions) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** Real-time filter over the installed plugins. */
+@Composable
+private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        shape = RoundedCornerShape(14.dp),
+        placeholder = { Text(stringResource(R.string.plugins_search_hint)) },
+        leadingIcon = {
+            Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(
+                        Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.plugins_search_clear),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        },
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search),
+        colors = OutlinedTextFieldDefaults.colors(
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+        ),
+    )
+}
+
+@Composable
+private fun NoMatchState(query: String) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                Icons.Outlined.SearchOff,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+            Text(
+                stringResource(R.string.plugins_search_empty, query),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

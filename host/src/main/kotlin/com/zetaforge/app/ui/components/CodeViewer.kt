@@ -1,25 +1,24 @@
 package com.zetaforge.app.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.WrapText
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -30,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,7 +50,10 @@ import com.zetaforge.runtime.pkg.PluginSourceFile
  *
  * This is the answer to "what is this plugin actually going to do?": the code
  * comes out of the very archive that was installed, not from a description.
- * Line numbers are rendered next to the text so the user can follow along.
+ *
+ * The code pane scrolls in both directions - vertically through the file and
+ * horizontally through long lines - so nothing is ever cut off. "Wrap lines"
+ * switches to soft wrapping for reading on a phone.
  */
 @Composable
 fun CodeViewerDialog(
@@ -60,6 +63,7 @@ fun CodeViewerDialog(
 ) {
     val accents = zetaAccents()
     var selected by remember(files) { mutableIntStateOf(0) }
+    var wrapLines by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -88,6 +92,17 @@ fun CodeViewerDialog(
                             stringResource(R.string.code_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = { wrapLines = !wrapLines }) {
+                        Icon(
+                            Icons.Outlined.WrapText,
+                            contentDescription = stringResource(R.string.code_wrap_lines),
+                            tint = if (wrapLines) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                         )
                     }
                     IconButton(onClick = onDismiss) {
@@ -149,36 +164,46 @@ fun CodeViewerDialog(
                     contentColor = accents.consoleText,
                 ) {
                     val lines = remember(file) { file.content.lines() }
+                    val vertical = rememberScrollState()
                     val horizontal = rememberScrollState()
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(vertical = 12.dp),
+
+                    // A single scrollable surface for the whole file: the gutter
+                    // and the code move together, and long lines are reachable by
+                    // dragging sideways instead of being clipped.
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(vertical)
+                            .then(if (wrapLines) Modifier else Modifier.horizontalScroll(horizontal))
+                            .padding(12.dp),
                     ) {
-                        items(lines.size) { index ->
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                        lines.forEachIndexed { index, line ->
+                            Row(
+                                modifier = if (wrapLines) Modifier.fillMaxWidth() else Modifier.width(IntrinsicSize.Max),
+                                verticalAlignment = Alignment.Top,
+                            ) {
                                 Text(
-                                    text = (index + 1).toString().padStart(3, ' '),
+                                    text = (index + 1).toString().padStart(4, ' '),
                                     style = CodeStyle,
                                     color = accents.muted,
+                                    softWrap = false,
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Text(
-                                    text = lines[index].ifEmpty { " " },
+                                    text = line.ifEmpty { " " },
                                     style = CodeStyle,
-                                    modifier = Modifier.horizontalScroll(horizontal),
-                                    maxLines = 1,
-                                    softWrap = false,
+                                    softWrap = wrapLines,
+                                    modifier = if (wrapLines) Modifier.weight(1f) else Modifier,
                                 )
                             }
                         }
                         if (file.truncated) {
-                            item {
-                                Text(
-                                    stringResource(R.string.code_truncated),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = accents.warning,
-                                    modifier = Modifier.padding(12.dp),
-                                )
-                            }
+                            Text(
+                                stringResource(R.string.code_truncated),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = accents.warning,
+                                modifier = Modifier.padding(top = 12.dp),
+                            )
                         }
                     }
                 }

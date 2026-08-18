@@ -34,6 +34,8 @@ data class HostUiState(
     val plugins: List<PluginEntry> = emptyList(),
     val logs: List<ZetaLogRecord> = emptyList(),
     val minLevel: ZetaLogLevel = ZetaLogLevel.DEBUG,
+    val query: String = "",
+    val expandedPlugins: Set<String> = emptySet(),
     val logsExpanded: Boolean = false,
     val importing: Boolean = false,
     val banner: Banner? = null,
@@ -45,6 +47,28 @@ data class HostUiState(
 ) {
     val filteredLogs: List<ZetaLogRecord>
         get() = logs.filter { it.level.ordinal >= minLevel.ordinal }
+
+    /**
+     * Plugins matching the search box, filtered on the text a user would think
+     * of: name, author, id and description. Empty query means everything.
+     */
+    val visiblePlugins: List<PluginEntry>
+        get() {
+            val needle = query.trim()
+            if (needle.isEmpty()) return plugins
+            return plugins.filter { entry ->
+                val manifest = entry.installed.manifest
+                listOf(
+                    manifest.name,
+                    manifest.author,
+                    manifest.pluginId,
+                    manifest.description,
+                    manifest.version,
+                ).any { it.contains(needle, ignoreCase = true) }
+            }
+        }
+
+    fun isExpanded(pluginId: String): Boolean = expandedPlugins.contains(pluginId)
 
     data class Banner(val message: String, val kind: Kind) {
         enum class Kind { SUCCESS, ERROR, INFO }
@@ -99,6 +123,7 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
     ) { base, plugins, logs ->
         base.copy(
             plugins = plugins.sortedBy { it.installed.displayName },
+            expandedPlugins = base.expandedPlugins.intersect(plugins.map { it.id }.toSet()),
             logs = logs,
             details = base.details?.let { details ->
                 plugins.firstOrNull { it.id == details.entry.id }
@@ -293,6 +318,18 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
 
     fun unload(pluginId: String) {
         viewModelScope.launch { runtime.unload(pluginId) }
+    }
+
+    fun setQuery(query: String) {
+        ui.value = ui.value.copy(query = query)
+    }
+
+    /** Expand/collapse one card; several can stay open at once. */
+    fun togglePluginExpanded(pluginId: String) {
+        val current = ui.value.expandedPlugins
+        ui.value = ui.value.copy(
+            expandedPlugins = if (current.contains(pluginId)) current - pluginId else current + pluginId,
+        )
     }
 
     fun setMinLevel(level: ZetaLogLevel) {

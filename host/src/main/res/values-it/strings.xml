@@ -27,6 +27,13 @@
     <string name="plugins_count">%1$d installati</string>
     <string name="plugins_empty_title">Nessun plugin installato</string>
     <string name="plugins_empty_body">Importa un pacchetto .zeta per eseguire codice Kotlin compilato fuori da questa app.</string>
+    <string name="plugins_search_hint">Cerca plugin</string>
+    <string name="plugins_search_clear">Cancella ricerca</string>
+    <string name="plugins_search_empty">Nessun plugin corrisponde a \"%1$s\".</string>
+    <string name="plugins_filtered_count">%1$d di %2$d</string>
+    <string name="action_expand_card">Mostra dettagli</string>
+    <string name="action_collapse_card">Nascondi dettagli</string>
+    <string name="code_wrap_lines">A capo automatico</string>
     <string name="plugin_by_author">di %1$s</string>
     <string name="plugin_version">v%1$s</string>
     <string name="plugin_took">in %1$d ms</string>

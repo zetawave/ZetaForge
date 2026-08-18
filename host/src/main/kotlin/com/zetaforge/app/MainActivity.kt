@@ -72,6 +72,8 @@ class MainActivity : ComponentActivity() {
                         onLevelChange = viewModel::setMinLevel,
                         onClearLogs = viewModel::clearLogs,
                         onToggleLogs = viewModel::toggleLogsExpanded,
+                        onQueryChange = viewModel::setQuery,
+                        onToggleCard = { viewModel.togglePluginExpanded(it.id) },
                         onDismissBanner = viewModel::dismissBanner,
                         onPermissionPromptResult = viewModel::onPermissionPromptResult,
                         onSpecialAccessResult = viewModel::onSpecialAccessResult,
