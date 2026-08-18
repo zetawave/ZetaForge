@@ -84,12 +84,22 @@ class BasicPluginVerifier(
             name = "hostApi",
             passed = manifest.isCompatibleWith(hostApiVersion),
             detail = if (manifest.isCompatibleWith(hostApiVersion)) {
-                "host API $hostApiVersion within [${manifest.minHostApi}..${manifest.maxHostApi}]"
+                "host API $hostApiVersion, plugin needs at least ${manifest.minHostApi}"
             } else {
-                "Plugin incompatible with this Host: requires API " +
-                    "[${manifest.minHostApi}..${manifest.maxHostApi}], Host implements $hostApiVersion"
+                "Plugin incompatible with this Host: needs API ${manifest.minHostApi} " +
+                    "or newer, Host implements $hostApiVersion"
             },
         )
+
+        if (manifest.isUntestedOn(hostApiVersion)) {
+            checks += VerificationCheck(
+                name = "hostApi",
+                passed = true,
+                warning = true,
+                detail = "Plugin was tested up to Host API ${manifest.maxHostApi}, " +
+                    "this Host implements $hostApiVersion",
+            )
+        }
 
         checks += VerificationCheck(
             name = "minSdk",

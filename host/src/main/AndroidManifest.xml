@@ -39,6 +39,16 @@
                 <data android:scheme="content" android:mimeType="*/*" android:pathPattern=".*\\.zeta" />
             </intent-filter>
         </activity>
+
+        <!--
+            Keeps a plugin run alive while it works. Without a foreground
+            service Android freezes the process as soon as the screen goes off,
+            and a long transfer simply stops until the phone wakes up.
+        -->
+        <service
+            android:name=".service.PluginExecutionService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>

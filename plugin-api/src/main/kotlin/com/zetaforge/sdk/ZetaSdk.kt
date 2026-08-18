@@ -14,8 +14,18 @@ package com.zetaforge.sdk
  */
 object ZetaSdk {
 
-    /** Current Host API version implemented by this SDK build. */
-    const val HOST_API_VERSION: Int = 1
+    /**
+     * Current Host API version implemented by this SDK build.
+     *
+     * 1 - initial contract: ZetaPlugin, PluginResult, ZetaLog.
+     * 2 - adds ZetaProgress, and the Host keeps a foreground service alive for
+     *     the whole execution, so a plugin survives the screen going off.
+     *
+     * Additions are backwards compatible: a plugin built against API 1 runs
+     * unchanged on a Host implementing API 2 (see `maxHostApi` handling in the
+     * runtime, which warns instead of refusing).
+     */
+    const val HOST_API_VERSION: Int = 2
 
     /** Lowest Host API version this SDK still knows how to talk to. */
     const val MIN_SUPPORTED_PLUGIN_API: Int = 1

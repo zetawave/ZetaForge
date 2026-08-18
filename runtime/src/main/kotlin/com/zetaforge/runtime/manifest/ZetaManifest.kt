@@ -63,9 +63,21 @@ data class ZetaManifest(
     val signature: PluginSignature?,
 ) {
 
-    /** True when this plugin can talk to the API version implemented by the Host. */
+    /**
+     * True when this plugin can talk to the API version implemented by the Host.
+     *
+     * Only [minHostApi] is a hard requirement: a plugin cannot run on a Host
+     * older than the contract it was built against. [maxHostApi] records the
+     * newest Host the author tested, so a newer Host is a *warning*, not a
+     * refusal - otherwise every Host update would break every existing plugin,
+     * which is the opposite of what versioning is for.
+     */
     fun isCompatibleWith(hostApiVersion: Int = ZetaSdk.HOST_API_VERSION): Boolean =
-        hostApiVersion in minHostApi..maxHostApi
+        hostApiVersion >= minHostApi
+
+    /** True when the Host is newer than the plugin was tested against. */
+    fun isUntestedOn(hostApiVersion: Int = ZetaSdk.HOST_API_VERSION): Boolean =
+        hostApiVersion > maxHostApi
 
     /** Plain permission names, for the places that only need the identifiers. */
     val permissionNames: List<String> get() = permissions.map { it.name }

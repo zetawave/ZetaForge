@@ -1,7 +1,10 @@
 package com.zetaforge.app
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -11,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zetaforge.app.permission.ActivityPermissionGateway
 import com.zetaforge.app.ui.HostActions
@@ -32,6 +36,15 @@ class MainActivity : ComponentActivity() {
     private val viewModel: HostViewModel by viewModels()
 
     private lateinit var permissionGateway: ActivityPermissionGateway
+
+    /**
+     * Registered in onCreate, as the Activity Result API requires; launched
+     * later, once the Activity is started.
+     */
+    private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private var notificationPermissionAsked = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -90,6 +103,24 @@ class MainActivity : ComponentActivity() {
         }
 
         handleIncomingPackage(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ensureNotificationPermission()
+    }
+
+    /**
+     * The progress notification is how a long run stays visible - and on
+     * Android 13+ posting it needs the user's consent. Asked once, quietly: a
+     * refusal only costs the notification, the run itself is unaffected.
+     */
+    private fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || notificationPermissionAsked) return
+        notificationPermissionAsked = true
+        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     override fun onNewIntent(intent: Intent) {

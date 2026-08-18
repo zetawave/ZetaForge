@@ -74,10 +74,18 @@ class ZetaManifestTest {
     }
 
     @Test
-    fun `reports incompatibility with an out of range host`() {
+    fun `runs on the Host it was built for and on newer ones`() {
         val manifest = ZetaManifest.parse(validManifest())
-        assertFalse(manifest.isCompatibleWith(2))
+
+        // minHostApi is the hard requirement…
+        assertTrue(manifest.isCompatibleWith(1))
         assertFalse(manifest.isCompatibleWith(0))
+
+        // …while a newer Host is allowed, and only flagged as untested: a Host
+        // update must not break every plugin already out there.
+        assertTrue(manifest.isCompatibleWith(2))
+        assertTrue(manifest.isUntestedOn(2))
+        assertFalse(manifest.isUntestedOn(1))
     }
 
     private fun assertThrows(block: () -> Unit): ZetaManifestException = try {

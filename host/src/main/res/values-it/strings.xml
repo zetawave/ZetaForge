@@ -49,6 +49,12 @@
     <string name="banner_import_missing">Importazione fallita: nessun file in %1$s</string>
     <string name="banner_uninstalled">Disinstallato %1$s</string>
 
+    <!-- Notifiche -->
+    <string name="notification_channel_runs">Esecuzioni dei plugin</string>
+    <string name="notification_channel_runs_description">Mantiene attivo il plugin in esecuzione e ne mostra il progresso.</string>
+    <string name="notification_running">In esecuzione…</string>
+    <string name="notification_stop">Ferma</string>
+
     <!-- Log -->
     <string name="logs_title">Log</string>
     <string name="logs_empty">Nessun record di log.</string>

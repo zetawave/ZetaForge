@@ -16,6 +16,7 @@ import com.zetaforge.runtime.permission.PermissionDecision
 import com.zetaforge.runtime.permission.PermissionGateway
 import com.zetaforge.runtime.permission.PermissionInspector
 import com.zetaforge.runtime.permission.PermissionPlan
+import com.zetaforge.runtime.task.ZetaTaskCenter
 import com.zetaforge.runtime.verify.BasicPluginVerifier
 import com.zetaforge.runtime.verify.PluginVerifier
 import com.zetaforge.sdk.PluginResult
@@ -206,6 +207,7 @@ class ZetaPluginRuntime(
                         ).filterValues { it.isNotBlank() },
                     )
                     updateState(pluginId, PluginState.FAILED, failure, permissionPlan = decision.plan)
+                    ZetaTaskCenter.end(pluginId)
                     return@withContext failure
                 }
 
@@ -220,6 +222,11 @@ class ZetaPluginRuntime(
             updateState(pluginId, PluginState.STARTING)
             logger.info(SOURCE, pluginId, "START")
             updateState(pluginId, PluginState.RUNNING)
+
+            // Publishes the run process-wide so the Host can keep a foreground
+            // service alive for its whole duration: without it, Android freezes
+            // the process as soon as the screen goes off.
+            ZetaTaskCenter.begin(pluginId, entry.installed.displayName)
 
             val runStarted = System.currentTimeMillis()
             val result = try {
@@ -242,6 +249,8 @@ class ZetaPluginRuntime(
                     ),
                 )
             }
+
+            ZetaTaskCenter.end(pluginId)
 
             when (result) {
                 is PluginResult.Success -> {

@@ -7,6 +7,7 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.zetaforge.app.R
+import com.zetaforge.app.service.PluginExecutionService
 import com.zetaforge.runtime.ImportResult
 import com.zetaforge.runtime.PluginEntry
 import com.zetaforge.runtime.ZetaPluginRuntime
@@ -16,6 +17,7 @@ import com.zetaforge.runtime.permission.PermissionPlan
 import com.zetaforge.runtime.permission.SpecialAccess
 import com.zetaforge.runtime.pkg.PluginSourceFile
 import com.zetaforge.runtime.pkg.PluginSourceReader
+import com.zetaforge.runtime.task.ZetaTaskCenter
 import com.zetaforge.sdk.PluginResult
 import com.zetaforge.sdk.ZetaLogLevel
 import kotlinx.coroutines.CompletableDeferred
@@ -25,6 +27,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -116,6 +120,9 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
     private var pendingPermissionPrompt: CompletableDeferred<Boolean>? = null
     private var pendingSpecialAccess: CompletableDeferred<Boolean>? = null
 
+    /** The job of the plugin currently running, so the notification can stop it. */
+    private var runningJob: Job? = null
+
     val state: StateFlow<HostUiState> = combine(
         ui,
         runtime.plugins,
@@ -134,6 +141,15 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch { runtime.refresh() }
+
+        // "Stop" in the notification asks the runtime to cancel; the job lives
+        // here, so this is where the request is honoured.
+        viewModelScope.launch {
+            ZetaTaskCenter.cancelRequests.collectLatest { pluginId ->
+                runtime.logger.warn("Runtime", pluginId, "Stop requested by the user")
+                runningJob?.cancel()
+            }
+        }
     }
 
     // -- import -------------------------------------------------------------
@@ -195,11 +211,26 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
 
     // -- execution ----------------------------------------------------------
 
-    /** Runs a plugin. [input] is passed through untouched. */
+    /**
+     * Runs a plugin.
+     *
+     * A foreground service is started for the whole execution: a process without
+     * one is frozen by Android as soon as the screen goes off, which would stall
+     * any long-running plugin. It is stopped as soon as the run ends, so short
+     * plugins barely show a notification.
+     */
     fun start(pluginId: String, input: Bundle = Bundle()) {
-        viewModelScope.launch {
-            val result = runtime.execute(pluginId, input)
-            (result as? PluginResult.Failure)?.let(::showPermissionBlockIfNeeded)
+        val application = getApplication<Application>()
+        runningJob = viewModelScope.launch {
+            PluginExecutionService.start(application)
+            try {
+                val result = runtime.execute(pluginId, input)
+                (result as? PluginResult.Failure)?.let(::showPermissionBlockIfNeeded)
+            } finally {
+                ZetaTaskCenter.end(pluginId)
+                PluginExecutionService.stop(application)
+                runningJob = null
+            }
         }
     }
 
