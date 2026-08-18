@@ -17,5 +17,9 @@ gradlePlugin {
             id = "com.zetaforge.zeta-plugin"
             implementationClass = "com.zetaforge.builder.ZetaPluginPackagerPlugin"
         }
+        create("zetaHostPermissions") {
+            id = "com.zetaforge.host-permissions"
+            implementationClass = "com.zetaforge.builder.HostPermissionsPlugin"
+        }
     }
 }

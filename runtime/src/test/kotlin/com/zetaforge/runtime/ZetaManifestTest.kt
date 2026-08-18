@@ -18,7 +18,7 @@ class ZetaManifestTest {
         assertEquals("com.zetaforge.plugins.retrofitdemo", manifest.pluginId)
         assertEquals("com.zetaforge.plugins.retrofitdemo.RetrofitDemoPlugin", manifest.entryPoint)
         assertEquals("0.1.0", manifest.version)
-        assertEquals(listOf("android.permission.INTERNET"), manifest.permissions)
+        assertEquals(listOf("android.permission.INTERNET"), manifest.permissionNames)
         assertEquals(1, manifest.dex.size)
         assertEquals("dex/classes.dex", manifest.dex.first().path)
         assertNull(manifest.signature)

@@ -1,0 +1,86 @@
+# ---------------------------------------------------------------------------
+# ZetaForge Host - permission superset.
+#
+# Android fixes an app's permissions at install time, from the manifest of the
+# installed APK: a permission that is not listed here can NEVER be granted to a
+# plugin at run time (requestPermissions() returns denied without showing any
+# dialog, and even `adb shell pm grant` refuses it).
+#
+# So this file is the ceiling of what plugins may ever ask for. It is injected
+# into the Host's merged manifest by the build - you never edit XML.
+#
+# Declaring is NOT granting. Everything listed here stays ungranted until a
+# plugin declares it in its own .zeta manifest and the user accepts the dialog
+# the runtime shows at START. Listing a permission the user never grants costs
+# nothing but a line in the app's settings page.
+#
+# Syntax:  <permission name> [maxSdkVersion=NN]
+# Lines starting with # and blank lines are ignored.
+# After editing: ./run.sh   (the Host must be rebuilt and reinstalled)
+# ---------------------------------------------------------------------------
+
+# --- Network ---------------------------------------------------------------
+android.permission.INTERNET
+android.permission.ACCESS_NETWORK_STATE
+android.permission.ACCESS_WIFI_STATE
+android.permission.CHANGE_WIFI_STATE
+android.permission.CHANGE_NETWORK_STATE
+
+# --- Files and media -------------------------------------------------------
+# Legacy storage is capped at API 32: from 33 the granular media permissions
+# below replace it, which is exactly what maxSdkVersion expresses.
+android.permission.READ_EXTERNAL_STORAGE maxSdkVersion=32
+android.permission.WRITE_EXTERNAL_STORAGE maxSdkVersion=29
+android.permission.READ_MEDIA_IMAGES
+android.permission.READ_MEDIA_VIDEO
+android.permission.READ_MEDIA_AUDIO
+android.permission.READ_MEDIA_VISUAL_USER_SELECTED
+android.permission.ACCESS_MEDIA_LOCATION
+# Special access: also needs the user to flip a switch in Settings.
+android.permission.MANAGE_EXTERNAL_STORAGE
+
+# --- Camera and microphone -------------------------------------------------
+android.permission.CAMERA
+android.permission.RECORD_AUDIO
+
+# --- Location --------------------------------------------------------------
+android.permission.ACCESS_COARSE_LOCATION
+android.permission.ACCESS_FINE_LOCATION
+
+# --- Bluetooth and nearby devices ------------------------------------------
+android.permission.BLUETOOTH maxSdkVersion=30
+android.permission.BLUETOOTH_ADMIN maxSdkVersion=30
+android.permission.BLUETOOTH_SCAN
+android.permission.BLUETOOTH_CONNECT
+android.permission.BLUETOOTH_ADVERTISE
+android.permission.NEARBY_WIFI_DEVICES
+
+# --- Personal data ---------------------------------------------------------
+android.permission.READ_CONTACTS
+android.permission.WRITE_CONTACTS
+android.permission.READ_CALENDAR
+android.permission.WRITE_CALENDAR
+
+# --- Notifications and foreground work -------------------------------------
+android.permission.POST_NOTIFICATIONS
+android.permission.FOREGROUND_SERVICE
+android.permission.FOREGROUND_SERVICE_DATA_SYNC
+android.permission.WAKE_LOCK
+android.permission.VIBRATE
+android.permission.RECEIVE_BOOT_COMPLETED
+
+# --- Scheduling ------------------------------------------------------------
+android.permission.SCHEDULE_EXACT_ALARM
+android.permission.USE_EXACT_ALARM
+
+# --- Special access (each still needs a Settings switch) -------------------
+android.permission.SYSTEM_ALERT_WINDOW
+android.permission.PACKAGE_USAGE_STATS
+android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+android.permission.REQUEST_INSTALL_PACKAGES
+android.permission.WRITE_SETTINGS
+android.permission.QUERY_ALL_PACKAGES
+
+# --- Device state ----------------------------------------------------------
+android.permission.READ_PHONE_STATE
+android.permission.BATTERY_STATS

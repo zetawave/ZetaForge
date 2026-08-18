@@ -1,7 +1,6 @@
 package com.zetaforge.runtime
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import com.zetaforge.runtime.install.InstallOutcome
@@ -12,6 +11,11 @@ import com.zetaforge.runtime.loader.PluginClassLoader
 import com.zetaforge.runtime.loader.PluginClassLoaderFactory
 import com.zetaforge.runtime.loader.SharedContract
 import com.zetaforge.runtime.log.ZetaLogger
+import com.zetaforge.runtime.permission.PermissionCoordinator
+import com.zetaforge.runtime.permission.PermissionDecision
+import com.zetaforge.runtime.permission.PermissionGateway
+import com.zetaforge.runtime.permission.PermissionInspector
+import com.zetaforge.runtime.permission.PermissionPlan
 import com.zetaforge.runtime.verify.BasicPluginVerifier
 import com.zetaforge.runtime.verify.PluginVerifier
 import com.zetaforge.sdk.PluginResult
@@ -37,6 +41,8 @@ data class PluginEntry(
     val state: PluginState,
     val lastResult: PluginResult? = null,
     val loaderStrategy: String? = null,
+    /** Permission picture of the last evaluation, for the UI to render. */
+    val permissionPlan: PermissionPlan? = null,
 ) {
     val id: String get() = installed.id
     val isBusy: Boolean
@@ -72,7 +78,14 @@ class ZetaPluginRuntime(
     private val appContext: Context = context.applicationContext
     private val storage = PluginStorage(appContext)
 
-    private val hostPermissions: Set<String> = readHostPermissions(appContext)
+    /** Exposed so the Host can feed back Activity-only signals (rationale state). */
+    val permissionInspector = PermissionInspector(appContext)
+    private val inspector get() = permissionInspector
+
+    /** Evaluates and requests plugin permissions before every execution. */
+    val permissions = PermissionCoordinator(inspector, logger)
+
+    private val hostPermissions: Set<String> get() = inspector.declaredByHost
 
     private val installer = PluginInstaller(
         storage = storage,
@@ -85,6 +98,19 @@ class ZetaPluginRuntime(
 
     private val _plugins = MutableStateFlow<List<PluginEntry>>(emptyList())
     val plugins: StateFlow<List<PluginEntry>> = _plugins.asStateFlow()
+
+    /**
+     * Installs the component that can actually show permission UI. The Host does
+     * this from its Activity; without it the runtime denies instead of hanging.
+     */
+    fun setPermissionGateway(gateway: PermissionGateway) {
+        permissions.gateway = gateway
+    }
+
+    /** Re-evaluates the permissions of an installed plugin without running it. */
+    fun inspectPermissions(pluginId: String): PermissionPlan? =
+        _plugins.value.firstOrNull { it.id == pluginId }
+            ?.let { inspector.inspect(it.installed.manifest) }
 
     init {
         // Plugins log through the shared SDK object; route it into our logger.
@@ -160,6 +186,35 @@ class ZetaPluginRuntime(
                 )
                 updateState(pluginId, PluginState.FAILED, failure)
                 return@withContext failure
+            }
+
+            // Permissions are re-checked on every run: they can be revoked from
+            // Settings, or auto-revoked by Android, between two executions.
+            when (val decision = permissions.ensureGranted(entry.installed.manifest)) {
+                is PermissionDecision.Blocked -> {
+                    val duration = System.currentTimeMillis() - started
+                    val failure = PluginResult.Failure(
+                        message = decision.message,
+                        durationMs = duration,
+                        errorCode = decision.errorCode,
+                        data = mapOf(
+                            "missing" to decision.plan.let { plan ->
+                                (plan.requestable + plan.permanentlyDenied + plan.undeclared)
+                                    .joinToString { it.name }
+                            },
+                            "specialAccess" to decision.plan.missingSpecialAccess.joinToString { it.access.label },
+                        ).filterValues { it.isNotBlank() },
+                    )
+                    updateState(pluginId, PluginState.FAILED, failure, permissionPlan = decision.plan)
+                    return@withContext failure
+                }
+
+                is PermissionDecision.Allowed -> {
+                    decision.missingOptional.forEach {
+                        logger.warn(SOURCE, pluginId, "Running without optional permission " + it.shortName)
+                    }
+                    updateState(pluginId, PluginState.RUNNING, permissionPlan = decision.plan)
+                }
             }
 
             updateState(pluginId, PluginState.STARTING)
@@ -249,12 +304,12 @@ class ZetaPluginRuntime(
             )
         }
 
-        val missingPermissions = manifest.permissions.filterNot { hostPermissions.contains(it) }
+        val missingPermissions = manifest.permissionNames.filterNot { hostPermissions.contains(it) }
         if (missingPermissions.isNotEmpty()) {
             logger.warn(
                 SOURCE, pluginId,
                 "Permission mismatch: plugin requests ${missingPermissions.joinToString()} " +
-                    "but the Host does not declare it. The plugin runs with the Host's permissions.",
+                    "but the Host APK does not declare it, so it can never be granted.",
             )
         }
 
@@ -312,23 +367,17 @@ class ZetaPluginRuntime(
         state: PluginState,
         result: PluginResult? = null,
         loaderStrategy: String? = null,
+        permissionPlan: PermissionPlan? = null,
     ) {
         _plugins.value = _plugins.value.map { entry ->
             if (entry.id != pluginId) entry else entry.copy(
                 state = state,
                 lastResult = result ?: entry.lastResult,
                 loaderStrategy = loaderStrategy ?: entry.loaderStrategy,
+                permissionPlan = permissionPlan ?: entry.permissionPlan,
             )
         }
     }
-
-    private fun readHostPermissions(context: Context): Set<String> = runCatching {
-        val info = context.packageManager.getPackageInfo(
-            context.packageName,
-            PackageManager.GET_PERMISSIONS,
-        )
-        info.requestedPermissions?.toSet() ?: emptySet()
-    }.getOrDefault(emptySet())
 
     private data class LoadedPlugin(
         val instance: ZetaPlugin,

@@ -33,6 +33,7 @@ own DEX. A Gradle task verifies that on the built APK.
 7. [Importing and running a plugin](#7-importing-and-running-a-plugin)
 8. [How dynamic loading works](#8-how-dynamic-loading-works)
 9. [How plugin dependencies work](#9-how-plugin-dependencies-work)
+9b. [Permissions](#9b-permissions)
 10. [Proving Retrofit is not in the Host](#10-proving-retrofit-is-not-in-the-host)
 11. [Writing your own plugin](#11-writing-your-own-plugin)
 12. [Tests](#12-tests)
@@ -50,7 +51,7 @@ own DEX. A Gradle task verifies that on the built APK.
 | **Host** (`host/`) | The installed app. UI only: import, list, start, inspect, logs. |
 | **SDK / plugin-api** (`plugin-api/`) | The versioned contract: `ZetaPlugin`, `PluginResult`, `PluginState`, `ZetaLog`. |
 | **Runtime** (`runtime/`) | Import, validation, installation, class loading, lifecycle, execution, logging, error handling. |
-| **Plugin** (`plugins/retrofit-demo/`) | A separately built Kotlin module with its own dependencies. |
+| **Plugins** (`plugins/retrofit-demo/`, `plugins/files-demo/`) | Separately built Kotlin modules: one with external dependencies (Retrofit/OkHttp), one that needs a run-time permission (MediaStore). |
 | **Builder** (`plugin-builder/`) | Gradle tooling that turns a built plugin into a `.zeta` archive. |
 
 The Host has no idea what any plugin does. It knows `PluginPackage`,
@@ -73,13 +74,15 @@ ZetaForge/
 ├── plugin-api/            ZetaForge Plugin SDK / shared contract
 ├── runtime/               ZetaForge Plugin Runtime
 ├── plugins/
-│   └── retrofit-demo/     separately built Kotlin plugin
+│   ├── retrofit-demo/     reference plugin: external libraries (template)
+│   └── files-demo/        reference plugin: run-time permissions
 ├── plugin-builder/        included Gradle build: .zeta packaging tooling
 ├── docs/                  architecture notes
 ├── run.sh                 one-shot dev loop: build -> install -> import -> run
 ├── scripts/               doctor / build / install / run / logs / clean
 ├── gradle/                wrapper + version catalog
 ├── zetaforge.properties   single source of truth for names, packages, SDK levels
+├── zetaforge.permissions  the permission ceiling, injected into the Host manifest
 └── settings.gradle.kts
 ```
 
@@ -186,6 +189,7 @@ Archive layout:
 retrofit-demo.zeta
 ├── manifest.json
 ├── dex/classes.dex
+├── source/…               the plugin's own .kt files, shown by VIEW CODE
 ├── libs/.keep
 └── metadata/build.json
 ```
@@ -194,21 +198,29 @@ retrofit-demo.zeta
 
 ```json
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "pluginId": "com.zetaforge.plugins.retrofitdemo",
+  "author": "ZetaForge Team <plugins@example.com>",
+  "license": "Apache-2.0",
   "name": "Retrofit Demo",
   "version": "0.1.0",
   "entryPoint": "com.zetaforge.plugins.retrofitdemo.RetrofitDemoPlugin",
   "minHostApi": 1,
   "maxHostApi": 1,
   "minSdk": 26,
-  "permissions": ["android.permission.INTERNET"],
+  "permissions": [
+    { "name": "android.permission.INTERNET", "reason": "Sends the demo HTTPS request", "optional": false, "minSdk": 1 }
+  ],
+  "specialAccess": [],
   "capabilities": ["network.http"],
   "dependencies": {
     "bundled": ["com.squareup.okhttp3:okhttp:4.12.0", "com.squareup.okio:okio:3.6.0", "com.squareup.retrofit2:retrofit:2.11.0"],
     "hostProvided": ["com.zetaforge:plugin-api:1", "org.jetbrains.kotlin:kotlin-stdlib", "org.jetbrains.kotlinx:kotlinx-coroutines-core"]
   },
-  "code": { "dex": [{ "path": "dex/classes.dex", "size": 1021140, "sha256": "…", "dexVersion": "038" }] },
+  "code": {
+    "dex": [{ "path": "dex/classes.dex", "size": 1021376, "sha256": "…", "dexVersion": "038" }],
+    "source": [{ "path": "source/src/main/kotlin/.../RetrofitDemoPlugin.kt", "language": "kotlin", "size": 6100 }]
+  },
   "signature": null
 }
 ```
@@ -311,6 +323,95 @@ Measured on the produced artifact: `classes.dex` defines **548 classes** —
 OkHttp, Okio, Retrofit and the plugin itself. `com.zetaforge.sdk.*`, `kotlin.*`
 and `kotlinx.coroutines.*` appear only as references, never as definitions.
 
+## 9b. Permissions
+
+### The one rule Android imposes
+
+An app's permissions are frozen at install time from the manifest of the
+installed APK. A permission that is not in the Host APK **can never be granted
+at run time**: `requestPermissions()` returns denied without showing a dialog,
+and even `adb shell pm grant` refuses it. Dynamically loaded code has no manifest
+of its own as far as the OS is concerned.
+
+ZetaForge therefore splits the problem in two:
+
+| Question | Where it is answered |
+|---|---|
+| What *may* ever be asked? | `zetaforge.permissions` - the Host's ceiling, build time |
+| What *is* asked, and when? | the plugin's own `.zeta` manifest, at every START |
+
+**Declaring is not granting.** Everything in the ceiling stays ungranted until a
+plugin declares it and the user accepts the dialog. Over-declaring costs a line
+in the app's settings page, nothing else.
+
+### Declaring the ceiling (once)
+
+`zetaforge.permissions` is a plain list; the build injects it into the Host's
+merged manifest, so no XML is ever edited by hand:
+
+```
+android.permission.READ_MEDIA_IMAGES
+android.permission.READ_EXTERNAL_STORAGE maxSdkVersion=32
+android.permission.CAMERA
+...
+```
+
+It already covers files/media, camera, microphone, location, Bluetooth,
+contacts, calendar, notifications, alarms and the special accesses. Adding one
+means editing that file and running `./run.sh` - a normal app update.
+
+### Declaring what a plugin needs
+
+In the plugin's `build.gradle.kts`, with the reason the user will read:
+
+```kotlin
+permission("android.permission.READ_MEDIA_IMAGES") {
+    reason = "Counts the images in your library to build the report"
+    minSdk = 33
+}
+permission("android.permission.READ_EXTERNAL_STORAGE") {
+    reason = "Counts the images in your library to build the report"
+    maxSdk = 32
+}
+permission("android.permission.ACCESS_MEDIA_LOCATION") {
+    reason = "Reads the location stored inside photos, when available"
+    optional = true      // the plugin runs anyway if it is denied
+}
+specialAccess("allFilesAccess") { reason = "Writes the archive anywhere you choose" }
+```
+
+### What happens at START
+
+```
+execute()
+  -> PermissionInspector: what does this plugin need, on THIS device, right now?
+  -> not applicable on this API level?      ignore
+  -> already granted?                       proceed
+  -> not in the Host manifest?              PERMISSION_NOT_DECLARED_BY_HOST + how to fix
+  -> requestable?    rationale dialog (plugin name + reason) -> system dialog
+  -> denied for good? PERMISSION_PERMANENTLY_DENIED + "open settings"
+  -> special access?  explanation -> the exact Settings screen -> re-check on return
+  -> re-inspect, then run or fail with a structured result
+```
+
+Nothing is cached: permissions can be revoked from Settings, and Android
+auto-revokes them for unused apps, so the check runs on **every** execution.
+
+Three families are handled distinctly, because Android treats them differently:
+install-time permissions (granted with the app), run-time/dangerous permissions
+(dialog, revocable, "don't ask again"), and special access (all files access,
+overlay, exact alarms, usage access, notification access, battery, install
+packages, write settings) which is only reachable through a dedicated Settings
+screen.
+
+### What you see in the app
+
+The plugin card lists the permissions the package declares before you ever run
+it; `DETAILS` shows each one with its reason and live state (granted, will be
+requested, denied permanently, not needed on this Android version); `VIEW CODE`
+shows the plugin's own sources, shipped inside the `.zeta`, so a permission
+request can be checked against the code that will use it.
+
 ## 10. Proving Retrofit is not in the Host
 
 Automated, and wired into the Host build:
@@ -375,10 +476,10 @@ Add the module to `settings.gradle.kts`. Nothing in the Host changes.
 
 | Layer | Command | Covers |
 |---|---|---|
-| Manifest (9 tests) | `./gradlew :runtime:test` | valid manifest, malformed JSON, missing/invalid entry point, invalid version, future format, bad API range |
-| Package + verifier (8 tests) | same | valid `.zeta`, missing `classes.dex`, invalid ZIP, missing manifest, checksum mismatch, bad DEX magic, incompatible Host API, pinned-checksum mismatch |
+| Manifest + permissions rules (27 tests) | `./gradlew :runtime:test` | valid manifest, malformed JSON, missing/invalid entry point, invalid version, future format, bad API range |
+| Package + verifier | same | valid `.zeta`, missing `classes.dex`, invalid ZIP, missing manifest, checksum mismatch, bad DEX magic, incompatible Host API, pinned-checksum mismatch |
 | Builder | `./gradlew :plugins:retrofit-demo:buildZetaPlugin` | builds the plugin, produces the `.zeta`, fails if `manifest.json`, `classes.dex` or the entry point class are missing (the DEX is parsed, not trusted) |
-| Integration (8 tests) | `./gradlew :host:connectedDebugAndroidTest` | the full chain, on a device |
+| Integration (17 tests) | `./gradlew :host:connectedDebugAndroidTest` | the full chain on a device: import, DEX loading, Retrofit call, error containment, the permission gate (granted / denied / not declared by the Host) and both translations |
 
 The integration test (`host/src/androidTest/.../ZetaForgeAcceptanceTest.kt`) is
 the important one:
@@ -518,12 +619,16 @@ What this PoC **demonstrably** does:
 | Error containment (plugin throws / network fails) | **works** — Host survives, plugin reports `FAILED` |
 | Repeated execution, unload, uninstall, re-import | **works** |
 | Manifest + package validation, SHA-256 checksums, Host API range | **works** |
+| Run-time permissions requested per plugin, with reasons | **works** |
+| Special access (all files, overlay, alarms, ...) routed to Settings | **works** |
+| Reading the plugin's own source inside the app (`VIEW CODE`) | **works** - sources travel inside the `.zeta` |
+| English + Italian UI | **works** |
 
 What this PoC **does not** do (by design, in scope for later):
 
 | Area | Reality today |
 |---|---|
-| **Permissions** | A plugin cannot obtain permissions the Host does not declare. Manifest permissions are a declaration; the runtime compares and logs mismatches. There is no per-plugin permission enforcement. |
+| **Permissions** | Implemented: plugins declare permissions with a reason, the runtime evaluates them on every run and requests what is missing (run-time dialogs *and* special-access Settings screens). The hard limit stays: a permission absent from the Host APK can never be granted, so `zetaforge.permissions` is the ceiling. Grants are process-wide, not per plugin. |
 | **Android resources** | Plugins ship code only. `R`-based resources, layouts, drawables and string resources from the plugin APK are not merged into the Host and are not accessible. Use `assets/` in the package for data. |
 | **Manifest components** | `Activity`, `Service`, `BroadcastReceiver` and `ContentProvider` declared by a plugin are ignored: the Host manifest is fixed at install time and Android cannot register components dynamically. |
 | **AndroidX in plugins** | Plain JVM/Android libraries work. AndroidX libraries that rely on resources, `ContentProvider` initialisers (`androidx.startup`) or manifest merging will not work unmodified. |

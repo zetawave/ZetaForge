@@ -3,29 +3,45 @@ package com.zetaforge.app.ui
 import android.app.Application
 import android.net.Uri
 import android.os.Bundle
+import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.zetaforge.app.R
 import com.zetaforge.runtime.ImportResult
 import com.zetaforge.runtime.PluginEntry
 import com.zetaforge.runtime.ZetaPluginRuntime
 import com.zetaforge.runtime.log.ZetaLogRecord
+import com.zetaforge.runtime.permission.PermissionCoordinator
+import com.zetaforge.runtime.permission.PermissionPlan
+import com.zetaforge.runtime.permission.SpecialAccess
+import com.zetaforge.runtime.pkg.PluginSourceFile
+import com.zetaforge.runtime.pkg.PluginSourceReader
+import com.zetaforge.sdk.PluginResult
 import com.zetaforge.sdk.ZetaLogLevel
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /** Everything the Host screen renders. */
 data class HostUiState(
     val plugins: List<PluginEntry> = emptyList(),
     val logs: List<ZetaLogRecord> = emptyList(),
     val minLevel: ZetaLogLevel = ZetaLogLevel.DEBUG,
+    val logsExpanded: Boolean = false,
     val importing: Boolean = false,
     val banner: Banner? = null,
     val details: DetailsState? = null,
+    val codeViewer: CodeViewerState? = null,
+    val permissionPrompt: PermissionPrompt? = null,
+    val specialAccessPrompt: SpecialAccessPrompt? = null,
+    val blockedDialog: BlockedDialog? = null,
 ) {
     val filteredLogs: List<ZetaLogRecord>
         get() = logs.filter { it.level.ordinal >= minLevel.ordinal }
@@ -38,20 +54,43 @@ data class HostUiState(
         val entry: PluginEntry,
         val verification: List<String> = emptyList(),
     )
+
+    /** Sources read out of the installed package, shown by the code viewer. */
+    data class CodeViewerState(
+        val pluginName: String,
+        val files: List<PluginSourceFile>,
+    )
+
+    /** Rationale shown before Android's own permission dialog. */
+    data class PermissionPrompt(val pluginName: String, val plan: PermissionPlan)
+
+    /** Explanation shown before jumping to a Settings screen. */
+    data class SpecialAccessPrompt(val access: SpecialAccess, val reason: String)
+
+    /** Terminal state: nothing can be asked, only Settings (or a new build) helps. */
+    data class BlockedDialog(
+        @StringRes val titleRes: Int,
+        val body: String,
+        val canOpenSettings: Boolean,
+    )
 }
 
 /**
  * Bridges the Compose UI and [ZetaPluginRuntime].
  *
  * The view model holds no plugin-specific knowledge: it forwards ids and input
- * bundles. All loading, class loading and error containment lives in the
- * runtime, and no composable ever touches it directly.
+ * bundles, and turns the runtime's permission requests into dialog state. All
+ * loading, class loading and error containment lives in the runtime, and no
+ * composable ever touches it directly.
  */
 class HostViewModel(application: Application) : AndroidViewModel(application) {
 
     val runtime = ZetaPluginRuntime(application)
 
     private val ui = MutableStateFlow(HostUiState())
+
+    private var pendingPermissionPrompt: CompletableDeferred<Boolean>? = null
+    private var pendingSpecialAccess: CompletableDeferred<Boolean>? = null
 
     val state: StateFlow<HostUiState> = combine(
         ui,
@@ -72,6 +111,8 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { runtime.refresh() }
     }
 
+    // -- import -------------------------------------------------------------
+
     /** Imports a `.zeta` selected through the Storage Access Framework. */
     fun importPlugin(uri: Uri) {
         viewModelScope.launch {
@@ -82,75 +123,132 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
             if (stream == null) {
                 ui.value = ui.value.copy(
                     importing = false,
-                    banner = HostUiState.Banner("Import failed: cannot read the selected file", HostUiState.Banner.Kind.ERROR),
+                    banner = HostUiState.Banner(string(R.string.banner_import_unreadable), HostUiState.Banner.Kind.ERROR),
                 )
                 return@launch
             }
-            val banner = when (val result = runtime.importPlugin(stream, name)) {
-                is ImportResult.Success -> HostUiState.Banner(
-                    "Installed ${result.entry.installed.displayName} v${result.entry.installed.version}",
-                    HostUiState.Banner.Kind.SUCCESS,
-                )
-
-                is ImportResult.Failure -> HostUiState.Banner(
-                    "Import failed (${result.stage}): ${result.reason}",
-                    HostUiState.Banner.Kind.ERROR,
-                )
-            }
-            ui.value = ui.value.copy(importing = false, banner = banner)
+            finishImport(runtime.importPlugin(stream, name))
         }
     }
 
     /**
-     * Imports a `.zeta` from a plain filesystem path.
-     *
-     * Used by the adb-driven developer loop (`run.sh`), where the archive has
-     * been copied into the app's own cache directory: there is no SAF picker
-     * involved and no content URI to resolve.
+     * Imports a `.zeta` from a plain filesystem path, used by the adb-driven
+     * developer loop (`run.sh`) where the archive already sits in the app cache.
      */
     fun importPluginFile(path: String) {
         viewModelScope.launch {
-            val file = java.io.File(path)
+            val file = File(path)
             if (!file.isFile) {
                 ui.value = ui.value.copy(
-                    banner = HostUiState.Banner("Import failed: no file at $path", HostUiState.Banner.Kind.ERROR),
+                    banner = HostUiState.Banner(string(R.string.banner_import_missing, path), HostUiState.Banner.Kind.ERROR),
                 )
                 return@launch
             }
             ui.value = ui.value.copy(importing = true, banner = null)
-            val banner = when (val result = runtime.importPlugin(file.inputStream(), file.name)) {
-                is ImportResult.Success -> HostUiState.Banner(
-                    "Installed " + result.entry.installed.displayName + " v" + result.entry.installed.version,
-                    HostUiState.Banner.Kind.SUCCESS,
-                )
-
-                is ImportResult.Failure -> HostUiState.Banner(
-                    "Import failed (" + result.stage + "): " + result.reason,
-                    HostUiState.Banner.Kind.ERROR,
-                )
-            }
-            ui.value = ui.value.copy(importing = false, banner = banner)
+            finishImport(runtime.importPlugin(file.inputStream(), file.name))
         }
     }
 
+    private fun finishImport(result: ImportResult) {
+        val banner = when (result) {
+            is ImportResult.Success -> HostUiState.Banner(
+                string(
+                    R.string.banner_installed,
+                    result.entry.installed.displayName,
+                    result.entry.installed.version,
+                ),
+                HostUiState.Banner.Kind.SUCCESS,
+            )
+
+            is ImportResult.Failure -> HostUiState.Banner(
+                string(R.string.banner_import_failed, result.stage, result.reason),
+                HostUiState.Banner.Kind.ERROR,
+            )
+        }
+        ui.value = ui.value.copy(importing = false, banner = banner)
+    }
+
+    // -- execution ----------------------------------------------------------
+
     /** Runs a plugin. [input] is passed through untouched. */
     fun start(pluginId: String, input: Bundle = Bundle()) {
-        viewModelScope.launch { runtime.execute(pluginId, input) }
+        viewModelScope.launch {
+            val result = runtime.execute(pluginId, input)
+            (result as? PluginResult.Failure)?.let(::showPermissionBlockIfNeeded)
+        }
     }
 
     /** Failure scenario used by the PoC: unreachable host, so the plugin fails. */
     fun startFailing(pluginId: String) {
-        val input = Bundle().apply {
-            putString("baseUrl", "https://zetaforge-unreachable.invalid/")
-        }
-        start(pluginId, input)
+        start(pluginId, Bundle().apply { putString("baseUrl", "https://zetaforge-unreachable.invalid/") })
     }
 
     /** Failure scenario: the plugin throws inside `execute`. */
     fun startThrowing(pluginId: String) {
-        val input = Bundle().apply { putBoolean("throwOnPurpose", true) }
-        start(pluginId, input)
+        start(pluginId, Bundle().apply { putBoolean("throwOnPurpose", true) })
     }
+
+    /**
+     * Turns a permission-related failure into a dialog that tells the user what
+     * to do next, instead of leaving them with an error code.
+     */
+    private fun showPermissionBlockIfNeeded(failure: PluginResult.Failure) {
+        val dialog = when (failure.errorCode) {
+            PermissionCoordinator.ERROR_PERMANENTLY_DENIED -> HostUiState.BlockedDialog(
+                titleRes = R.string.permissions_denied_title,
+                body = string(R.string.permissions_denied_body),
+                canOpenSettings = true,
+            )
+
+            PermissionCoordinator.ERROR_NOT_DECLARED -> HostUiState.BlockedDialog(
+                titleRes = R.string.permissions_undeclared_title,
+                body = string(R.string.permissions_undeclared_body, failure.data["missing"].orEmpty()),
+                canOpenSettings = false,
+            )
+
+            else -> null
+        }
+        if (dialog != null) ui.value = ui.value.copy(blockedDialog = dialog)
+    }
+
+    // -- permission dialogs (driven by the runtime through the gateway) ------
+
+    /** Called by the gateway before Android's dialog; suspends until answered. */
+    suspend fun explainPermissions(plan: PermissionPlan): Boolean {
+        val pluginName = state.value.plugins.firstOrNull { it.id == plan.pluginId }
+            ?.installed?.displayName
+            ?: plan.pluginId
+        val deferred = CompletableDeferred<Boolean>()
+        pendingPermissionPrompt = deferred
+        ui.value = ui.value.copy(permissionPrompt = HostUiState.PermissionPrompt(pluginName, plan))
+        return deferred.await()
+    }
+
+    fun onPermissionPromptResult(accepted: Boolean) {
+        ui.value = ui.value.copy(permissionPrompt = null)
+        pendingPermissionPrompt?.complete(accepted)
+        pendingPermissionPrompt = null
+    }
+
+    /** Called by the gateway before opening a Settings screen. */
+    suspend fun explainSpecialAccess(access: SpecialAccess, reason: String): Boolean {
+        val deferred = CompletableDeferred<Boolean>()
+        pendingSpecialAccess = deferred
+        ui.value = ui.value.copy(specialAccessPrompt = HostUiState.SpecialAccessPrompt(access, reason))
+        return deferred.await()
+    }
+
+    fun onSpecialAccessResult(accepted: Boolean) {
+        ui.value = ui.value.copy(specialAccessPrompt = null)
+        pendingSpecialAccess?.complete(accepted)
+        pendingSpecialAccess = null
+    }
+
+    fun dismissBlockedDialog() {
+        ui.value = ui.value.copy(blockedDialog = null)
+    }
+
+    // -- details, code, housekeeping ----------------------------------------
 
     fun openDetails(entry: PluginEntry) {
         ui.value = ui.value.copy(details = HostUiState.DetailsState(entry))
@@ -167,12 +265,28 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
         ui.value = ui.value.copy(details = null)
     }
 
+    /** Loads the sources shipped inside the package and shows the code viewer. */
+    fun openCode(entry: PluginEntry) {
+        viewModelScope.launch {
+            val files = withContext(Dispatchers.IO) {
+                runCatching { PluginSourceReader.read(entry.installed) }.getOrDefault(emptyList())
+            }
+            ui.value = ui.value.copy(
+                codeViewer = HostUiState.CodeViewerState(entry.installed.displayName, files),
+            )
+        }
+    }
+
+    fun closeCode() {
+        ui.value = ui.value.copy(codeViewer = null)
+    }
+
     fun uninstall(pluginId: String) {
         viewModelScope.launch {
             runtime.uninstall(pluginId)
             ui.value = ui.value.copy(
                 details = null,
-                banner = HostUiState.Banner("Uninstalled $pluginId", HostUiState.Banner.Kind.INFO),
+                banner = HostUiState.Banner(string(R.string.banner_uninstalled, pluginId), HostUiState.Banner.Kind.INFO),
             )
         }
     }
@@ -185,6 +299,10 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
         ui.value = ui.value.copy(minLevel = level)
     }
 
+    fun toggleLogsExpanded() {
+        ui.value = ui.value.copy(logsExpanded = !ui.value.logsExpanded)
+    }
+
     fun clearLogs() {
         runtime.logger.clear()
     }
@@ -193,5 +311,6 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
         ui.value = ui.value.copy(banner = null)
     }
 
-    val uiFlow: StateFlow<HostUiState> get() = ui.asStateFlow()
+    private fun string(@StringRes id: Int, vararg args: Any): String =
+        getApplication<Application>().getString(id, *args)
 }

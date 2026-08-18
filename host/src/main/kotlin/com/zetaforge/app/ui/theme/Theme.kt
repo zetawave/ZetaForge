@@ -8,9 +8,11 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.zetaforge.app.R
 
 // ---------------------------------------------------------------------------
 // Palette: "forge at night" - deep indigo surfaces, violet primary for actions,
@@ -121,21 +123,53 @@ val zetaAccentsLight = ZetaAccentColors(
     muted = Slate500,
 )
 
+/**
+ * Inter for the interface, JetBrains Mono for anything that is literally code:
+ * ids, checksums, class names and the log console. Both are bundled, so the app
+ * renders identically on every device and needs no network.
+ */
+val InterFamily = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold),
+)
+
+val MonoFamily = FontFamily(
+    Font(R.font.jetbrainsmono_regular, FontWeight.Normal),
+    Font(R.font.jetbrainsmono_medium, FontWeight.Medium),
+)
+
 private val ZetaTypography = Typography().run {
     copy(
-        headlineMedium = headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.5).sp),
-        titleLarge = titleLarge.copy(fontWeight = FontWeight.SemiBold),
-        titleMedium = titleMedium.copy(fontWeight = FontWeight.SemiBold),
-        labelLarge = labelLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp),
-        labelSmall = labelSmall.copy(letterSpacing = 0.6.sp),
+        displaySmall = displaySmall.copy(fontFamily = InterFamily, fontWeight = FontWeight.Bold, letterSpacing = (-1).sp),
+        headlineLarge = headlineLarge.copy(fontFamily = InterFamily, fontWeight = FontWeight.Bold, letterSpacing = (-0.8).sp),
+        headlineMedium = headlineMedium.copy(fontFamily = InterFamily, fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp),
+        headlineSmall = headlineSmall.copy(fontFamily = InterFamily, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp),
+        titleLarge = titleLarge.copy(fontFamily = InterFamily, fontWeight = FontWeight.SemiBold),
+        titleMedium = titleMedium.copy(fontFamily = InterFamily, fontWeight = FontWeight.SemiBold),
+        titleSmall = titleSmall.copy(fontFamily = InterFamily, fontWeight = FontWeight.Medium),
+        bodyLarge = bodyLarge.copy(fontFamily = InterFamily),
+        bodyMedium = bodyMedium.copy(fontFamily = InterFamily),
+        bodySmall = bodySmall.copy(fontFamily = InterFamily),
+        labelLarge = labelLarge.copy(fontFamily = InterFamily, fontWeight = FontWeight.SemiBold, letterSpacing = 0.3.sp),
+        labelMedium = labelMedium.copy(fontFamily = InterFamily, fontWeight = FontWeight.Medium),
+        labelSmall = labelSmall.copy(fontFamily = InterFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.4.sp),
     )
 }
 
 /** Monospaced style used by the log console and by technical key/value rows. */
 val MonoStyle = TextStyle(
-    fontFamily = FontFamily.Monospace,
+    fontFamily = MonoFamily,
     fontSize = 12.sp,
     lineHeight = 17.sp,
+)
+
+/** Slightly larger monospace, for the source code viewer. */
+val CodeStyle = TextStyle(
+    fontFamily = MonoFamily,
+    fontSize = 12.5.sp,
+    lineHeight = 19.sp,
 )
 
 @Composable

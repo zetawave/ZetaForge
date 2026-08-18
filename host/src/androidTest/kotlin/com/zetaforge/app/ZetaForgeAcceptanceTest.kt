@@ -62,7 +62,7 @@ class ZetaForgeAcceptanceTest {
         assertTrue("package not stored privately", File(installDir, "current.zeta").isFile)
         assertTrue("code.jar not prepared", File(installDir, "extracted/code.jar").isFile)
         assertEquals(64, entry.installed.sha256.length)
-        assertTrue(entry.installed.manifest.permissions.contains("android.permission.INTERNET"))
+        assertTrue(entry.installed.manifest.permissionNames.contains("android.permission.INTERNET"))
     }
 
     @Test

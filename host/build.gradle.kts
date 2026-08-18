@@ -5,6 +5,9 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    // Injects zetaforge.permissions into the merged manifest: plugins declare
+    // what they need, the Host declares the ceiling, nobody edits XML.
+    id("com.zetaforge.host-permissions")
 }
 
 /**
@@ -135,9 +138,10 @@ dependencies {
  * specific plugin.
  */
 val demoPluginArtifact = tasks.register<Copy>("copyDemoPluginAsset") {
-    dependsOn(":plugins:retrofit-demo:buildZetaPlugin")
-    from(project(":plugins:retrofit-demo").layout.buildDirectory.dir("zetaforge")) {
-        include("*.zeta")
+    val pluginModules = listOf(":plugins:retrofit-demo", ":plugins:files-demo")
+    pluginModules.forEach { dependsOn("$it:buildZetaPlugin") }
+    pluginModules.forEach { path ->
+        from(project(path).layout.buildDirectory.dir("zetaforge")) { include("*.zeta") }
     }
     into(layout.buildDirectory.dir("generated/zetaAssets"))
 }

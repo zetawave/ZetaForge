@@ -18,8 +18,9 @@
 | `plugin-api` | Android library | `ZetaPlugin`, `PluginResult`, `PluginState`, `ZetaLog`, `ZetaSdk.HOST_API_VERSION` | nothing (stdlib/coroutines are `compileOnly`) |
 | `runtime` | Android library | manifest parsing, package reading, verification, installation, class loading, lifecycle, execution, logging | `plugin-api` |
 | `host` | Android app | Compose UI + `HostViewModel` only | `runtime` (and transitively `plugin-api`) |
-| `plugins/retrofit-demo` | Android app (never installed) | the demo plugin and its own dependencies | `plugin-api` **compileOnly** |
-| `plugin-builder` | included Gradle build | `com.zetaforge.zeta-plugin` plugin, `buildZetaPlugin` task, `.zeta` writer, DEX reader | AGP API |
+| `plugins/retrofit-demo` | Android app (never installed) | reference plugin with external dependencies | `plugin-api` **compileOnly** |
+| `plugins/files-demo` | Android app (never installed) | reference plugin needing a run-time permission | `plugin-api` **compileOnly** |
+| `plugin-builder` | included Gradle build | `com.zetaforge.zeta-plugin` (packaging), `com.zetaforge.host-permissions` (manifest injection), `.zeta` writer, DEX reader | AGP API |
 
 Rules enforced by the build:
 
@@ -42,10 +43,16 @@ retrofit-demo.zeta                (ZIP)
 ```
 
 `manifest.json` fields: `formatVersion`, `pluginId`, `name`, `version`,
-`description`, `author`, `entryPoint`, `minHostApi`, `maxHostApi`, `minSdk`,
-`permissions[]`, `capabilities[]`, `dependencies.bundled[]`,
-`dependencies.hostProvided[]`, `code.dex[]` (path/size/sha256/dexVersion),
-`signature` (currently `null`), `display`.
+`description`, `author`, `homepage`, `license`, `entryPoint`, `minHostApi`,
+`maxHostApi`, `minSdk`, `permissions[]`, `specialAccess[]`, `capabilities[]`,
+`dependencies.bundled[]`, `dependencies.hostProvided[]`, `code.dex[]`
+(path/size/sha256/dexVersion), `code.source[]`, `signature` (currently `null`),
+`display`.
+
+Format versions: **1** had plain-string permissions; **2** adds structured
+permissions (`reason`, `optional`, `minSdk`, `maxSdk`), `specialAccess` and
+bundled sources. Version 1 packages still parse - the runtime accepts both
+shapes, which is the whole point of versioning the format.
 
 ## 3. How the plugin is built
 
@@ -142,3 +149,67 @@ and the `signature` block exist already.
 | `PluginState` | full lifecycle modelled | scheduler, background execution, updates |
 | `capabilities[]` | recorded and displayed | capability-based Host API surface |
 | `libs/` in the package | reserved, empty | native `.so` support |
+
+
+## 9. Permissions
+
+### The constraint
+
+Android freezes an app's permissions at install time from the APK manifest.
+Dynamically loaded code has no manifest of its own, so a plugin can only ever
+use permissions the *Host* declares. This is not a design choice; there is no
+API to add permissions to an installed app.
+
+### The split
+
+```
+zetaforge.permissions      (build time)   the ceiling: what may EVER be asked
+        |
+        v  injected into the merged manifest by com.zetaforge.host-permissions
+Host APK <uses-permission …>
+        |
+        v  compared, per run, against
+plugin .zeta manifest      (run time)     what THIS plugin asks, and why
+```
+
+Declaring is not granting: nothing in the ceiling is held until a plugin asks
+and the user accepts.
+
+### The pipeline, on every execution
+
+```
+PermissionInspector      reads the Host manifest, the current grants, the API level
+  -> PermissionRules     pure logic: GRANTED | REQUESTABLE | PERMANENTLY_DENIED
+                         | NOT_DECLARED_BY_HOST | NOT_APPLICABLE  (+ specialAccess)
+  -> PermissionPlan      what blocks, what is optional, what can be asked
+  -> PermissionGateway   (Host, Activity-backed) rationale -> system dialog
+                         or explanation -> the exact Settings screen
+  -> re-inspect          the user may have changed anything meanwhile
+  -> Allowed | Blocked(errorCode)
+```
+
+`PermissionRules` is deliberately pure so the whole decision table is unit
+tested without a device; `PermissionInspector` is the thin platform layer, and
+`ActivityPermissionGateway` is the only piece that needs an Activity.
+
+Error codes surfaced to the UI: `PERMISSION_DENIED`,
+`PERMISSION_PERMANENTLY_DENIED` (offers Settings), `SPECIAL_ACCESS_REQUIRED`,
+`PERMISSION_NOT_DECLARED_BY_HOST` (a build-time problem, with the fix spelled
+out).
+
+### Limits
+
+Grants are process-wide: a permission granted for one plugin is held by the
+process, so every plugin sees it. Per-plugin enforcement would need a separate
+process or a separate installed APK per plugin.
+
+## 10. Sources inside the package
+
+`buildZetaPlugin` copies the plugin's own `.kt`/`.java` files into `source/` and
+lists them in `code.source[]`. The Host reads them straight from the installed
+archive (`PluginSourceReader`) and shows them in the code viewer, so the user can
+read what a plugin does before granting it anything.
+
+This is transparency, not proof: it shows the sources shipped *with* the DEX, not
+that the DEX was compiled from them. Reproducible builds plus signatures would be
+needed for that, and both are future work.

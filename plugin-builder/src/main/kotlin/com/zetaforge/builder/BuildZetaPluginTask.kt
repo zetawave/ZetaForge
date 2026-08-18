@@ -6,12 +6,14 @@ import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
@@ -64,6 +66,16 @@ abstract class BuildZetaPluginTask : DefaultTask() {
     @get:Input abstract val minHostApi: Property<Int>
     @get:Input abstract val maxHostApi: Property<Int>
     @get:Input abstract val permissions: ListProperty<String>
+    @get:Input abstract val declaredPermissions: ListProperty<PermissionDeclaration>
+    @get:Input abstract val specialAccess: ListProperty<SpecialAccessDeclaration>
+    @get:Input abstract val homepage: Property<String>
+    @get:Input abstract val license: Property<String>
+    @get:Input abstract val sourceRoot: Property<String>
+
+    /** Sources shipped inside the package so the user can read what runs. */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sourceFiles: ConfigurableFileCollection
     @get:Input abstract val capabilities: ListProperty<String>
     @get:Input abstract val manifestFormatVersion: Property<Int>
     @get:Input abstract val minSdk: Property<Int>
@@ -103,8 +115,9 @@ abstract class BuildZetaPluginTask : DefaultTask() {
         out.parentFile.mkdirs()
         out.delete()
 
-        val manifest = buildManifest(dexFiles)
-        writeArchive(out, manifest, dexFiles)
+        val sources = collectSources()
+        val manifest = buildManifest(dexFiles, sources)
+        writeArchive(out, manifest, dexFiles, sources)
 
         val zetaSha = out.sha256()
         File(out.parentFile, out.name + ".sha256").writeText(zetaSha + "  " + out.name + "\n")
@@ -130,18 +143,33 @@ abstract class BuildZetaPluginTask : DefaultTask() {
             .toList()
     }
 
-    private fun buildManifest(dexFiles: List<File>): JsonObject = JsonObject().apply {
+    /** Maps each shipped source file to its path inside the archive. */
+    private fun collectSources(): Map<String, File> {
+        val root = File(sourceRoot.get())
+        return sourceFiles.files
+            .filter { it.isFile }
+            .sortedBy { it.absolutePath }
+            .associateBy { file ->
+                val relative = runCatching { file.relativeTo(root).path }.getOrDefault(file.name)
+                "source/" + relative.replace(File.separatorChar, '/')
+            }
+    }
+
+    private fun buildManifest(dexFiles: List<File>, sources: Map<String, File>): JsonObject = JsonObject().apply {
         addProperty("formatVersion", manifestFormatVersion.get())
         addProperty("pluginId", pluginId.get())
         addProperty("name", displayName.get())
         addProperty("version", version.get())
         addProperty("description", pluginDescription.get())
         addProperty("author", author.get())
+        addProperty("homepage", homepage.get())
+        addProperty("license", license.get())
         addProperty("entryPoint", entryPoint.get())
         addProperty("minHostApi", minHostApi.get())
         addProperty("maxHostApi", maxHostApi.get())
         addProperty("minSdk", minSdk.get())
-        add("permissions", permissions.get().toJsonArray())
+        add("permissions", buildPermissions())
+        add("specialAccess", buildSpecialAccess())
         add("capabilities", capabilities.get().toJsonArray())
         add("dependencies", JsonObject().apply {
             add("bundled", bundledDependencies.get().toJsonArray())
@@ -158,6 +186,16 @@ abstract class BuildZetaPluginTask : DefaultTask() {
                     })
                 }
             })
+            add("source", JsonArray().apply {
+                sources.forEach { (path, file) ->
+                    add(JsonObject().apply {
+                        addProperty("path", path)
+                        addProperty("displayName", path.removePrefix("source/"))
+                        addProperty("language", if (file.extension == "java") "java" else "kotlin")
+                        addProperty("size", file.length())
+                    })
+                }
+            })
         })
         // Reserved for a future SignaturePluginVerifier: the Host already reads
         // this block and simply reports "unsigned" while it is null.
@@ -168,11 +206,47 @@ abstract class BuildZetaPluginTask : DefaultTask() {
         })
     }
 
-    private fun writeArchive(out: File, manifest: JsonObject, dexFiles: List<File>) {
+    /**
+     * Permissions are emitted in the v2 object form so the Host can show the
+     * reason to the user; plain names declared through `permissions` are folded
+     * in with an empty reason.
+     */
+    private fun buildPermissions(): JsonArray {
+        val declared = declaredPermissions.get()
+        val plain = permissions.get()
+            .filterNot { name -> declared.any { it.name == name } }
+            .map { PermissionDeclaration(it) }
+        return JsonArray().apply {
+            (declared + plain).forEach { permission ->
+                add(JsonObject().apply {
+                    addProperty("name", permission.name)
+                    addProperty("reason", permission.reason)
+                    addProperty("optional", permission.optional)
+                    addProperty("minSdk", permission.minSdk)
+                    if (permission.maxSdk != Int.MAX_VALUE) addProperty("maxSdk", permission.maxSdk)
+                })
+            }
+        }
+    }
+
+    private fun buildSpecialAccess(): JsonArray = JsonArray().apply {
+        specialAccess.get().forEach { access ->
+            add(JsonObject().apply {
+                addProperty("id", access.id)
+                addProperty("reason", access.reason)
+                addProperty("optional", access.optional)
+            })
+        }
+    }
+
+    private fun writeArchive(out: File, manifest: JsonObject, dexFiles: List<File>, sources: Map<String, File>) {
         val gson = GsonBuilder().setPrettyPrinting().disableHtmlEscaping().serializeNulls().create()
         ZipOutputStream(out.outputStream().buffered()).use { zip ->
             zip.putText("manifest.json", gson.toJson(manifest) + "\n")
             dexFiles.forEach { dex -> zip.putFile("dex/" + dex.name, dex.readBytes()) }
+            // Sources travel with the package so the Host can show the user what
+            // the code actually does before they run it.
+            sources.forEach { (path, file) -> zip.putFile(path, file.readBytes()) }
             zip.putText("libs/.keep", "reserved for native libraries and future artifacts\n")
             zip.putText(
                 "metadata/build.json",
@@ -192,6 +266,11 @@ abstract class BuildZetaPluginTask : DefaultTask() {
         }
     }
 
+    private fun permissionSummary(): String {
+        val names = (declaredPermissions.get().map { it.name } + permissions.get()).distinct()
+        return names.joinToString { it.substringAfterLast('.') }.ifEmpty { "none" }
+    }
+
     private fun report(out: File, dexFiles: List<File>, entryHolder: File, sha: String) {
         val strings = DexReader.readStrings(entryHolder)
         val hasRetrofit = strings.any { it.startsWith("Lretrofit2/") }
@@ -208,6 +287,9 @@ abstract class BuildZetaPluginTask : DefaultTask() {
                 "\n  version          : " + version.get() +
                 "\n  entryPoint       : " + entryPoint.get() + " (found in " + entryHolder.name + ")" +
                 "\n  dex files        : " + dexSummary +
+                "\n  permissions      : " + permissionSummary() +
+                "\n  special access   : " + specialAccess.get().joinToString { it.id }.ifEmpty { "none" } +
+                "\n  source files     : " + sourceFiles.files.count { it.isFile } +
                 "\n  retrofit2 in dex : " + hasRetrofit +
                 "\n  okhttp3 in dex   : " + hasOkHttp + "\n"
         )

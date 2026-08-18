@@ -105,20 +105,38 @@ class BasicPluginVerifier(
                 "expected ${expectedSha256?.take(16)}..., got ${plugin.sha256.take(16)}...",
         )
 
-        val missingPermissions = manifest.permissions.filterNot { hostPermissions.contains(it) }
+        // Only permissions that actually apply to this device matter: Android
+        // drops `maxSdkVersion`-capped permissions from the installed package,
+        // so on a newer API they are legitimately absent from the Host manifest.
+        val missingPermissions = manifest.permissions
+            .filter { it.appliesTo(hostSdkInt) && !it.optional }
+            .map { it.name }
+            .filterNot { hostPermissions.contains(it) }
         if (missingPermissions.isNotEmpty()) {
             checks += VerificationCheck(
                 name = "permissions",
                 passed = false,
                 warning = true,
                 detail = "Host does not declare: ${missingPermissions.joinToString()}. " +
-                    "The plugin runs with the Host's permissions only.",
+                    "Add them to zetaforge.permissions and rebuild the Host; a plugin " +
+                    "can never obtain a permission the Host APK does not declare.",
             )
         } else if (manifest.permissions.isNotEmpty()) {
             checks += VerificationCheck(
                 name = "permissions",
                 passed = true,
-                detail = "granted by Host: ${manifest.permissions.joinToString()}",
+                detail = "declared by Host, requested at run time: " +
+                    manifest.permissions.joinToString { it.shortName },
+            )
+        }
+
+        if (manifest.specialAccess.isNotEmpty()) {
+            checks += VerificationCheck(
+                name = "specialAccess",
+                passed = true,
+                warning = true,
+                detail = "requires user-granted special access: " +
+                    manifest.specialAccess.joinToString { it.access.label },
             )
         }
 

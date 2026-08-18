@@ -1,5 +1,8 @@
 package com.zetaforge.runtime.manifest
 
+import com.zetaforge.runtime.permission.PermissionRequirement
+import com.zetaforge.runtime.permission.SpecialAccess
+import com.zetaforge.runtime.permission.SpecialAccessRequirement
 import com.zetaforge.sdk.ZetaSdk
 import org.json.JSONArray
 import org.json.JSONException
@@ -16,12 +19,25 @@ data class DexEntry(
     val dexVersion: String,
 )
 
+/** A source file shipped inside the package so the user can read what runs. */
+data class SourceEntry(
+    val path: String,
+    val displayName: String,
+    val language: String,
+    val size: Long,
+)
+
 /**
  * Parsed, validated `manifest.json` of a `.zeta` package.
  *
  * The format is explicitly versioned ([formatVersion]) and carries forward
  * looking fields (signature, capabilities, dependencies) so packages produced
  * today keep parsing when the runtime grows.
+ *
+ * Format history:
+ * * **1** - initial: permissions were plain strings.
+ * * **2** - permissions may be objects (`reason`, `optional`, `minSdk`, `maxSdk`),
+ *   plus `specialAccess` and `source`. Version 1 packages still parse.
  */
 data class ZetaManifest(
     val formatVersion: Int,
@@ -30,15 +46,19 @@ data class ZetaManifest(
     val version: String,
     val description: String,
     val author: String,
+    val homepage: String,
+    val license: String,
     val entryPoint: String,
     val minHostApi: Int,
     val maxHostApi: Int,
     val minSdk: Int,
-    val permissions: List<String>,
+    val permissions: List<PermissionRequirement>,
+    val specialAccess: List<SpecialAccessRequirement>,
     val capabilities: List<String>,
     val bundledDependencies: List<String>,
     val hostProvidedDependencies: List<String>,
     val dex: List<DexEntry>,
+    val source: List<SourceEntry>,
     /** `null` while packages are unsigned; reserved for SignaturePluginVerifier. */
     val signature: PluginSignature?,
 ) {
@@ -46,6 +66,9 @@ data class ZetaManifest(
     /** True when this plugin can talk to the API version implemented by the Host. */
     fun isCompatibleWith(hostApiVersion: Int = ZetaSdk.HOST_API_VERSION): Boolean =
         hostApiVersion in minHostApi..maxHostApi
+
+    /** Plain permission names, for the places that only need the identifiers. */
+    val permissionNames: List<String> get() = permissions.map { it.name }
 
     companion object {
 
@@ -120,17 +143,78 @@ data class ZetaManifest(
                 version = version,
                 description = root.optString("description", ""),
                 author = root.optString("author", ""),
+                homepage = root.optString("homepage", ""),
+                license = root.optString("license", ""),
                 entryPoint = entryPoint,
                 minHostApi = minHostApi,
                 maxHostApi = maxHostApi,
                 minSdk = root.optInt("minSdk", 1),
-                permissions = root.optJSONArray("permissions").toStringList(),
+                permissions = parsePermissions(root.optJSONArray("permissions")),
+                specialAccess = parseSpecialAccess(root.optJSONArray("specialAccess")),
                 capabilities = root.optJSONArray("capabilities").toStringList(),
                 bundledDependencies = dependencies?.optJSONArray("bundled").toStringList(),
                 hostProvidedDependencies = dependencies?.optJSONArray("hostProvided").toStringList(),
                 dex = dex,
+                source = root.optJSONObject("code")?.optJSONArray("source")?.mapObjects { obj ->
+                    SourceEntry(
+                        path = obj.requireString("path"),
+                        displayName = obj.optString("displayName", obj.optString("path").substringAfterLast('/')),
+                        language = obj.optString("language", "kotlin"),
+                        size = obj.optLong("size", 0L),
+                    )
+                }.orEmpty(),
                 signature = PluginSignature.parse(root.optJSONObject("signature")),
             )
+        }
+
+        /**
+         * Accepts both the v1 shape (`["android.permission.INTERNET"]`) and the
+         * v2 shape (`[{ "name": ..., "reason": ..., "optional": ... }]`).
+         */
+        private fun parsePermissions(array: JSONArray?): List<PermissionRequirement> {
+            if (array == null) return emptyList()
+            val result = mutableListOf<PermissionRequirement>()
+            for (index in 0 until array.length()) {
+                val entry = array.opt(index)
+                when (entry) {
+                    is String -> if (entry.isNotBlank()) result += PermissionRequirement(entry)
+                    is JSONObject -> {
+                        val name = entry.optString("name", "")
+                        if (name.isBlank()) {
+                            throw ZetaManifestException("A permission entry has no 'name'.")
+                        }
+                        result += PermissionRequirement(
+                            name = name,
+                            reason = entry.optString("reason", ""),
+                            optional = entry.optBoolean("optional", false),
+                            minSdk = entry.optInt("minSdk", 1),
+                            maxSdk = entry.optInt("maxSdk", Int.MAX_VALUE),
+                        )
+                    }
+                }
+            }
+            return result
+        }
+
+        private fun parseSpecialAccess(array: JSONArray?): List<SpecialAccessRequirement> {
+            if (array == null) return emptyList()
+            val result = mutableListOf<SpecialAccessRequirement>()
+            for (index in 0 until array.length()) {
+                when (val entry = array.opt(index)) {
+                    is String -> SpecialAccess.fromId(entry)?.let { result += SpecialAccessRequirement(it) }
+                    is JSONObject -> {
+                        val id = entry.optString("id", entry.optString("name", ""))
+                        val access = SpecialAccess.fromId(id)
+                            ?: throw ZetaManifestException("Unknown special access '$id'.")
+                        result += SpecialAccessRequirement(
+                            access = access,
+                            reason = entry.optString("reason", ""),
+                            optional = entry.optBoolean("optional", false),
+                        )
+                    }
+                }
+            }
+            return result
         }
 
         private val PLUGIN_ID_PATTERN = Regex("[a-zA-Z][A-Za-z0-9_]*(\\.[a-zA-Z][A-Za-z0-9_]*)+")

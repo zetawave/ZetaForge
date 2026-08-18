@@ -63,18 +63,53 @@ dependencies {
     implementation(libs.okhttp) { exclude(group = "org.jetbrains.kotlin") }
 }
 
+// ---------------------------------------------------------------------------
+// TEMPLATE - copy this module to start a new plugin.
+// Every value below is what the Host shows to the user, so write it for a human.
+// ---------------------------------------------------------------------------
 zetaPlugin {
+    // Reverse-DNS id: unique, stable, also used as the installation directory.
     pluginId.set("com.zetaforge.plugins.retrofitdemo")
+
+    // Shown as the card title.
     displayName.set("Retrofit Demo")
-    version.set("0.1.0")
-    description.set("Performs a real HTTPS GET with Retrofit + OkHttp bundled in the plugin itself.")
-    author.set("ZetaForge")
+
+    // Shown next to the name and used to detect updates. Bump on every release.
+    version.set("1.0.0")
+
+    // Shown under the name in the plugin details.
+    author.set("ZetaForge Team <plugins@example.com>")
+
+    homepage.set("https://example.com/zetaforge/retrofit-demo")
+    license.set("Apache-2.0")
+
+    description.set(
+        "Reference plugin: performs a real HTTPS GET using Retrofit and OkHttp " +
+            "bundled inside the plugin itself, and reports status, duration and " +
+            "a preview of the response."
+    )
+
+    // The class implementing com.zetaforge.sdk.ZetaPlugin.
     entryPoint.set("com.zetaforge.plugins.retrofitdemo.RetrofitDemoPlugin")
+
+    // Host API range this plugin was built against.
     minHostApi.set(1)
     maxHostApi.set(1)
-    permissions.set(listOf("android.permission.INTERNET"))
+
+    // Permissions: declare only what you use, and say why. The Host shows the
+    // reason to the user and asks for it at START, every time it is missing.
+    permission("android.permission.INTERNET") {
+        reason = "Sends the demo HTTPS request to the public echo endpoint"
+    }
+
+    // Free-form capability tags, for future Host-side filtering.
     capabilities.set(listOf("network.http"))
+
+    // Output file name: build/zetaforge/<name>.zeta
     archiveBaseName.set("retrofit-demo")
+
+    // Sources shipped in the package so the user can read the code from the app.
+    // Defaults to src/main/kotlin - override only if you need to narrow it.
 }
 
 // The task is registered from the AGP variant callback, so configure it lazily by type.

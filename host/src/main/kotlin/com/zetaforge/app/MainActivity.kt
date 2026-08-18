@@ -12,6 +12,7 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.zetaforge.app.permission.ActivityPermissionGateway
 import com.zetaforge.app.ui.HostActions
 import com.zetaforge.app.ui.HostViewModel
 import com.zetaforge.app.ui.ZetaForgeScreen
@@ -21,7 +22,8 @@ import com.zetaforge.app.ui.theme.ZetaForgeTheme
  * The only Activity of the Host.
  *
  * It owns UI concerns exclusively: window setup, the Storage Access Framework
- * picker and state collection. Everything about plugins - validation,
+ * picker, and the Android APIs that only an Activity can reach (permission
+ * dialogs, Settings screens). Everything about plugins - validation,
  * installation, class loading, execution, error handling - lives in
  * `ZetaPluginRuntime`, reached through [HostViewModel].
  */
@@ -29,9 +31,21 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: HostViewModel by viewModels()
 
+    private lateinit var permissionGateway: ActivityPermissionGateway
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        // The runtime decides *whether* a permission is needed; this gateway is
+        // the only thing that can actually ask the user for it.
+        permissionGateway = ActivityPermissionGateway(
+            activity = this,
+            inspector = viewModel.runtime.permissionInspector,
+            onExplain = viewModel::explainPermissions,
+            onSpecialAccess = viewModel::explainSpecialAccess,
+        )
+        viewModel.runtime.setPermissionGateway(permissionGateway)
 
         setContent {
             ZetaForgeTheme {
@@ -48,14 +62,24 @@ class MainActivity : ComponentActivity() {
                         onImport = { picker.launch(arrayOf("*/*")) },
                         onStart = { viewModel.start(it.id) },
                         onDetails = viewModel::openDetails,
+                        onViewCode = viewModel::openCode,
                         onCloseDetails = viewModel::closeDetails,
+                        onCloseCode = viewModel::closeCode,
                         onRunFailing = { viewModel.startFailing(it.id) },
                         onRunThrowing = { viewModel.startThrowing(it.id) },
                         onUnload = { viewModel.unload(it.id) },
                         onUninstall = { viewModel.uninstall(it.id) },
                         onLevelChange = viewModel::setMinLevel,
                         onClearLogs = viewModel::clearLogs,
+                        onToggleLogs = viewModel::toggleLogsExpanded,
                         onDismissBanner = viewModel::dismissBanner,
+                        onPermissionPromptResult = viewModel::onPermissionPromptResult,
+                        onSpecialAccessResult = viewModel::onSpecialAccessResult,
+                        onDismissBlocked = viewModel::dismissBlockedDialog,
+                        onOpenAppSettings = {
+                            viewModel.dismissBlockedDialog()
+                            permissionGateway.openAppSettings()
+                        },
                     )
                 }
 

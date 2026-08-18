@@ -4,8 +4,9 @@
 #
 #   ./run.sh                 build plugin + Host, install and launch the app
 #                            (nothing is imported or executed: you drive the UI)
-#   ./run.sh --import        also import retrofit-demo.zeta into the Host
-#   ./run.sh --run           also import it and execute the plugin
+#   ./run.sh --import        also import the plugin(s) into the Host
+#   ./run.sh --run           also import and execute the plugin
+#   ./run.sh --plugin <name> which plugin: retrofit-demo (default), files-demo, all
 #   ./run.sh --scenario throw|unreachable
 #                            run the failure paths (implies --run)
 #   ./run.sh --logs          follow the ZetaForge log stream at the end
@@ -28,14 +29,13 @@ export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL='*'
 
 HOST_MODULE=":host"
-PLUGIN_MODULE=":plugins:retrofit-demo"
+PLUGIN_NAME="retrofit-demo"
+ALL_PLUGINS="retrofit-demo files-demo"
 HOST_APK="host/build/outputs/apk/debug/host-debug.apk"
-PLUGIN_ZETA="plugins/retrofit-demo/build/zetaforge/retrofit-demo.zeta"
 HOST_PACKAGE="com.zetaforge.app"
 MAIN_ACTIVITY="$HOST_PACKAGE/.MainActivity"
-PLUGIN_ID="com.zetaforge.plugins.retrofitdemo"
-DEVICE_TMP="/data/local/tmp/retrofit-demo.zeta"
-APP_IMPORT_PATH="/data/data/$HOST_PACKAGE/cache/import.zeta"
+DEVICE_TMP="/data/local/tmp/zetaforge-import.zeta"
+APP_IMPORT_DIR="/data/data/$HOST_PACKAGE/cache"
 
 ACTION_IMPORT="com.zetaforge.app.action.IMPORT_FILE"
 ACTION_RUN="com.zetaforge.app.action.RUN_PLUGIN"
@@ -55,6 +55,7 @@ SERIAL="${ANDROID_SERIAL:-}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --import|-i)   DO_IMPORT=1 ;;
+    --plugin|-p)   shift; PLUGIN_NAME="${1:-}" ;;
     --run|-r)      DO_IMPORT=1; DO_RUN=1 ;;
     --scenario)    shift; SCENARIO="${1:-}"; DO_IMPORT=1; DO_RUN=1 ;;
     --host-only)   BUILD_PLUGIN=0 ;;
@@ -70,11 +71,29 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# --host-only means "do not touch the plugin at all".
-if [ "$BUILD_PLUGIN" = "0" ] && [ "$DO_IMPORT" = "1" ] && [ ! -f "plugins/retrofit-demo/build/zetaforge/retrofit-demo.zeta" ]; then
-  echo "--host-only was given but no .zeta exists yet; build it with ./run.sh --plugin-only" >&2
-  exit 2
+# Which plugins this invocation works on.
+if [ "$PLUGIN_NAME" = "all" ]; then
+  SELECTED_PLUGINS="$ALL_PLUGINS"
+else
+  SELECTED_PLUGINS="$PLUGIN_NAME"
 fi
+for name in $SELECTED_PLUGINS; do
+  [ -d "plugins/$name" ] || { echo "Unknown plugin '$name' (looked for plugins/$name)" >&2; exit 2; }
+done
+
+zeta_path() { echo "plugins/$1/build/zetaforge/$1.zeta"; }
+plugin_id() {
+  # The id lives in the produced manifest: no duplication in this script.
+  local zeta
+  zeta="$(zeta_path "$1")"
+  [ -f "$zeta" ] || return 1
+  unzip -p "$zeta" manifest.json 2>/dev/null |
+    tr -d ' 	
+' |
+    grep -o '"pluginId":"[^"]*"' |
+    head -1 |
+    cut -d'"' -f4
+}
 
 # --- helpers ---------------------------------------------------------------
 step()  { printf '\033[1;36m==>\033[0m \033[1m%s\033[0m\n' "$*"; }
@@ -146,7 +165,9 @@ if [ "$DO_CLEAN" = "1" ]; then
 fi
 
 GRADLE_TARGETS=()
-[ "$BUILD_PLUGIN" = "1" ] && GRADLE_TARGETS+=("$PLUGIN_MODULE:buildZetaPlugin")
+if [ "$BUILD_PLUGIN" = "1" ]; then
+  for name in $SELECTED_PLUGINS; do GRADLE_TARGETS+=(":plugins:$name:buildZetaPlugin"); done
+fi
 [ "$BUILD_HOST" = "1" ] && GRADLE_TARGETS+=("$HOST_MODULE:assembleDebug")
 
 if [ "${#GRADLE_TARGETS[@]}" -gt 0 ]; then
@@ -181,32 +202,42 @@ until adbx shell pidof "$HOST_PACKAGE" >/dev/null 2>&1; do sleep 1; done
 # `logcat -c` is unreliable on emulators, so the dump is filtered by the pid
 # of the process we just started instead.
 APP_PID="$(adbx shell pidof "$HOST_PACKAGE" | tr -dc '0-9 ' | awk '{print $1}')"
-LOG_SINCE="$(adbx shell date "+%m-%d %H:%M:%S.000" | tr -d '\r')"
 
 if [ "$DO_IMPORT" = "1" ]; then
-  [ -f "$PLUGIN_ZETA" ] || fail "Plugin artifact missing: $PLUGIN_ZETA (run without --host-only)"
-  step "Importing $(basename "$PLUGIN_ZETA") ($(du -h "$PLUGIN_ZETA" | cut -f1))"
-  # Push to a shell-writable location, then stream it into the app's own cache
-  # through run-as: the Host imports from its private storage exactly as it
-  # would after a SAF pick, with no extra runtime permission involved.
-  adbx push "$PLUGIN_ZETA" "$DEVICE_TMP" >/dev/null
-  adbx shell "run-as $HOST_PACKAGE sh -c 'cat > $APP_IMPORT_PATH' < $DEVICE_TMP" \
-    || fail "run-as failed: the installed build must be the debuggable one"
-  adbx shell rm -f "$DEVICE_TMP" >/dev/null 2>&1 || true
-  adbx shell am start -n "$MAIN_ACTIVITY" -a "$ACTION_IMPORT" --es path "$APP_IMPORT_PATH" >/dev/null 2>&1
-  sleep 2
+  for name in $SELECTED_PLUGINS; do
+    zeta="$(zeta_path "$name")"
+    [ -f "$zeta" ] || fail "Plugin artifact missing: $zeta (build it with ./run.sh --plugin $name)"
+    step "Importing $(basename "$zeta") ($(du -h "$zeta" | cut -f1))"
+    # Push to a shell-writable location, then stream it into the app's own cache
+    # through run-as: the Host imports from its private storage exactly as it
+    # would after a SAF pick, with no extra runtime permission involved.
+    # One file per plugin: importing is asynchronous, so a shared path could be
+    # overwritten before the Host has finished reading it.
+    import_path="$APP_IMPORT_DIR/import-$name.zeta"
+    adbx push "$zeta" "$DEVICE_TMP" >/dev/null
+    adbx shell "run-as $HOST_PACKAGE sh -c 'cat > $import_path' < $DEVICE_TMP" \
+      || fail "run-as failed: the installed build must be the debuggable one"
+    adbx shell rm -f "$DEVICE_TMP" >/dev/null 2>&1 || true
+    adbx shell am start -n "$MAIN_ACTIVITY" -a "$ACTION_IMPORT" --es path "$import_path" >/dev/null 2>&1
+    sleep 3
+  done
 fi
 
 if [ "$DO_RUN" = "1" ]; then
   case "$SCENARIO" in
-    throw)       step "Running $PLUGIN_ID (failure scenario: plugin throws)" ;;
-    unreachable) step "Running $PLUGIN_ID (failure scenario: unreachable host)" ;;
-    "")          step "Running $PLUGIN_ID" ;;
-    *)           fail "Unknown scenario '$SCENARIO' (use throw or unreachable)" ;;
+    throw|unreachable|"") ;;
+    *) fail "Unknown scenario '$SCENARIO' (use throw or unreachable)" ;;
   esac
-  adbx shell am start -n "$MAIN_ACTIVITY" -a "$ACTION_RUN" \
-    --es pluginId "$PLUGIN_ID" ${SCENARIO:+--es scenario "$SCENARIO"} >/dev/null 2>&1
-  sleep 4
+  for name in $SELECTED_PLUGINS; do
+    id="$(plugin_id "$name")" || fail "Cannot read the plugin id of $name"
+    case "$SCENARIO" in
+      "") step "Running $id" ;;
+      *)  step "Running $id (failure scenario: $SCENARIO)" ;;
+    esac
+    adbx shell am start -n "$MAIN_ACTIVITY" -a "$ACTION_RUN" \
+      --es pluginId "$id" ${SCENARIO:+--es scenario "$SCENARIO"} >/dev/null 2>&1
+    sleep 5
+  done
 fi
 
 # Give the runtime a moment to emit its first records (the app has just been

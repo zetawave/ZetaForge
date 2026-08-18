@@ -1,4 +1,113 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Default (English) strings. Italian lives in values-it/strings.xml.
+    Every user-visible string in the Host goes through here; runtime log records
+    stay untranslated on purpose, they are developer output.
+-->
 <resources>
     <string name="app_name">ZetaForge</string>
+    <string name="app_tagline">Dynamic plugin runtime</string>
+
+    <!-- Actions -->
+    <string name="action_import_plugin">Import plugin</string>
+    <string name="action_importing">Importing…</string>
+    <string name="action_start">Start</string>
+    <string name="action_running">Running</string>
+    <string name="action_details">Details</string>
+    <string name="action_view_code">View code</string>
+    <string name="action_dismiss">Dismiss</string>
+    <string name="action_close">Close</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_continue">Continue</string>
+    <string name="action_unload">Unload</string>
+    <string name="action_uninstall">Uninstall</string>
+    <string name="action_open_settings">Open settings</string>
+    <string name="action_clear_logs">Clear logs</string>
+    <string name="action_expand_logs">Expand logs</string>
+    <string name="action_collapse_logs">Collapse logs</string>
+
+    <!-- Plugin list -->
+    <string name="plugins_title">Installed plugins</string>
+    <string name="plugins_none">none yet</string>
+    <string name="plugins_count">%1$d installed</string>
+    <string name="plugins_empty_title">No plugins installed</string>
+    <string name="plugins_empty_body">Import a .zeta package to load Kotlin code that was built outside this app.</string>
+    <string name="plugin_by_author">by %1$s</string>
+    <string name="plugin_version">v%1$s</string>
+    <string name="plugin_took">took %1$d ms</string>
+
+    <!-- Status -->
+    <string name="status_success">Success</string>
+    <string name="status_failed">Failed</string>
+
+    <!-- Banners -->
+    <string name="banner_installed">Installed %1$s v%2$s</string>
+    <string name="banner_import_failed">Import failed (%1$s): %2$s</string>
+    <string name="banner_import_unreadable">Import failed: cannot read the selected file</string>
+    <string name="banner_import_missing">Import failed: no file at %1$s</string>
+    <string name="banner_uninstalled">Uninstalled %1$s</string>
+
+    <!-- Logs -->
+    <string name="logs_title">Logs</string>
+    <string name="logs_empty">No log records yet.</string>
+
+    <!-- Permissions -->
+    <string name="permissions_title">Permissions</string>
+    <string name="permissions_none">This plugin requests no permissions.</string>
+    <string name="permissions_requested_by">%1$s needs these permissions</string>
+    <string name="permissions_explain_body">The plugin runs inside ZetaForge and uses the permissions you grant to this app. Nothing is granted until you accept.</string>
+    <string name="permissions_optional">optional</string>
+    <string name="permissions_required">required</string>
+    <string name="permissions_state_granted">Granted</string>
+    <string name="permissions_state_requestable">Will be requested</string>
+    <string name="permissions_state_denied">Denied permanently</string>
+    <string name="permissions_state_undeclared">Not available in this build</string>
+    <string name="permissions_state_not_applicable">Not needed on this Android version</string>
+    <string name="permissions_denied_title">Permission denied</string>
+    <string name="permissions_denied_body">Android will not ask again. Grant it from the app settings, then run the plugin again.</string>
+    <string name="permissions_undeclared_title">Permission unavailable</string>
+    <string name="permissions_undeclared_body">This build of ZetaForge does not declare %1$s, so Android can never grant it. Add it to zetaforge.permissions and reinstall the app.</string>
+    <string name="special_access_title">Extra access required</string>
+    <string name="special_access_body">%1$s must be enabled in Android settings. You will be taken to the right screen; come back when done.</string>
+
+    <!-- Code viewer -->
+    <string name="code_title">Plugin source</string>
+    <string name="code_subtitle">Shipped inside the package, so you can read what runs.</string>
+    <string name="code_none">This package ships no sources.</string>
+    <string name="code_truncated">File truncated for display.</string>
+
+    <!-- Details sheet -->
+    <string name="details_identity">Identity</string>
+    <string name="details_package">Package</string>
+    <string name="details_requested">Requested</string>
+    <string name="details_bundled_deps">Dependencies inside the plugin DEX</string>
+    <string name="details_host_deps">Provided by the Host</string>
+    <string name="details_verification">Verification</string>
+    <string name="details_last_result">Last result</string>
+    <string name="details_scenarios">Failure scenarios (PoC)</string>
+    <string name="details_scenarios_body">Both run the same plugin; the Host must survive and report the failure.</string>
+    <string name="details_scenario_unreachable">Unreachable host</string>
+    <string name="details_scenario_throw">Throw</string>
+    <string name="details_no_description">No description provided.</string>
+    <string name="details_unsigned">unsigned</string>
+    <string name="details_not_loaded">not loaded yet</string>
+    <string name="details_field_plugin_id">Plugin id</string>
+    <string name="details_field_entry_point">Entry point</string>
+    <string name="details_field_author">Author</string>
+    <string name="details_field_homepage">Homepage</string>
+    <string name="details_field_license">Licence</string>
+    <string name="details_field_host_api">Host API</string>
+    <string name="details_field_size">Size</string>
+    <string name="details_field_checksum">SHA-256</string>
+    <string name="details_field_dex">DEX</string>
+    <string name="details_field_signature">Signature</string>
+    <string name="details_field_class_loader">Class loader</string>
+    <string name="details_field_permissions">Permissions</string>
+    <string name="details_field_capabilities">Capabilities</string>
+    <string name="details_field_status">Status</string>
+    <string name="details_field_message">Message</string>
+    <string name="details_field_duration">Duration</string>
+    <string name="details_field_error_code">Error code</string>
+    <string name="details_field_format">Format</string>
+    <string name="details_field_min_sdk">Min SDK</string>
 </resources>

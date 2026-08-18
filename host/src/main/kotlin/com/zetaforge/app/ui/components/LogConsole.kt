@@ -18,7 +18,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CloseFullscreen
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.OpenInFull
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -32,9 +34,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.zetaforge.app.ui.theme.MonoStyle
 import com.zetaforge.app.ui.theme.zetaAccents
+import com.zetaforge.app.R
 import com.zetaforge.runtime.log.ZetaLogRecord
 import com.zetaforge.sdk.ZetaLogLevel
 
@@ -51,6 +55,8 @@ fun LogConsole(
     onLevelChange: (ZetaLogLevel) -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
+    expanded: Boolean = false,
+    onToggleExpand: (() -> Unit)? = null,
 ) {
     val accents = zetaAccents()
     val listState = rememberLazyListState()
@@ -71,7 +77,7 @@ fun LogConsole(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Logs",
+                    stringResource(R.string.logs_title),
                     style = MaterialTheme.typography.titleMedium,
                     color = accents.consoleText,
                 )
@@ -97,17 +103,29 @@ fun LogConsole(
                 IconButton(onClick = onClear) {
                     Icon(
                         Icons.Outlined.DeleteSweep,
-                        contentDescription = "Clear logs",
+                        contentDescription = stringResource(R.string.action_clear_logs),
                         tint = accents.muted,
                         modifier = Modifier.size(20.dp),
                     )
+                }
+                if (onToggleExpand != null) {
+                    IconButton(onClick = onToggleExpand) {
+                        Icon(
+                            if (expanded) Icons.Outlined.CloseFullscreen else Icons.Outlined.OpenInFull,
+                            contentDescription = stringResource(
+                                if (expanded) R.string.action_collapse_logs else R.string.action_expand_logs
+                            ),
+                            tint = accents.muted,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
 
             if (records.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        "No log records yet.",
+                        stringResource(R.string.logs_empty),
                         style = MonoStyle,
                         color = accents.muted,
                     )

@@ -1,6 +1,5 @@
 package com.zetaforge.app.ui
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,37 +37,50 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.zetaforge.app.R
+import com.zetaforge.app.ui.components.CodeViewerDialog
 import com.zetaforge.app.ui.components.LogConsole
-import com.zetaforge.app.ui.components.MetaChip
+import com.zetaforge.app.ui.components.PermissionBlockedDialog
+import com.zetaforge.app.ui.components.PermissionRequestDialog
 import com.zetaforge.app.ui.components.PluginCard
 import com.zetaforge.app.ui.components.PluginDetailsSheet
 import com.zetaforge.app.ui.components.SectionHeader
+import com.zetaforge.app.ui.components.SpecialAccessDialog
+import com.zetaforge.app.ui.components.ZetaLogo
 import com.zetaforge.app.ui.theme.zetaAccents
 import com.zetaforge.runtime.PluginEntry
 import com.zetaforge.sdk.ZetaLogLevel
-import com.zetaforge.sdk.ZetaSdk
 
 /** Actions the screen can trigger; implemented by the view model. */
 data class HostActions(
     val onImport: () -> Unit,
     val onStart: (PluginEntry) -> Unit,
     val onDetails: (PluginEntry) -> Unit,
+    val onViewCode: (PluginEntry) -> Unit,
     val onCloseDetails: () -> Unit,
+    val onCloseCode: () -> Unit,
     val onRunFailing: (PluginEntry) -> Unit,
     val onRunThrowing: (PluginEntry) -> Unit,
     val onUnload: (PluginEntry) -> Unit,
     val onUninstall: (PluginEntry) -> Unit,
     val onLevelChange: (ZetaLogLevel) -> Unit,
     val onClearLogs: () -> Unit,
+    val onToggleLogs: () -> Unit,
     val onDismissBanner: () -> Unit,
+    val onPermissionPromptResult: (Boolean) -> Unit,
+    val onSpecialAccessResult: (Boolean) -> Unit,
+    val onDismissBlocked: () -> Unit,
+    val onOpenAppSettings: () -> Unit,
 )
 
 /**
  * Root screen. Responsive by construction: a single scrolling column on phones,
  * a two-pane layout (plugins | console) from ~840dp, which covers large phones
- * in landscape, foldables, tablets and desktop-sized windows.
+ * in landscape, foldables, tablets and desktop-sized windows. The log console
+ * can also take over the whole screen.
  */
 @Composable
 fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
@@ -89,8 +101,22 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
                 else -> 18.dp
             }
 
-            if (wide) {
-                Row(
+            when {
+                // Reading a long run is a first-class activity in a tool like
+                // this, so the console can take the whole screen.
+                state.logsExpanded -> LogConsole(
+                    records = state.filteredLogs,
+                    minLevel = state.minLevel,
+                    onLevelChange = actions.onLevelChange,
+                    onClear = actions.onClearLogs,
+                    expanded = true,
+                    onToggleExpand = actions.onToggleLogs,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = horizontalPadding, vertical = 12.dp),
+                )
+
+                wide -> Row(
                     Modifier.fillMaxSize().padding(horizontal = horizontalPadding, vertical = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
@@ -107,11 +133,12 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
                         minLevel = state.minLevel,
                         onLevelChange = actions.onLevelChange,
                         onClear = actions.onClearLogs,
+                        onToggleExpand = actions.onToggleLogs,
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                     )
                 }
-            } else {
-                Column(
+
+                else -> Column(
                     Modifier.fillMaxSize().padding(horizontal = horizontalPadding, vertical = 12.dp),
                 ) {
                     PluginPane(state, actions, Modifier.weight(1f))
@@ -121,6 +148,7 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
                         minLevel = state.minLevel,
                         onLevelChange = actions.onLevelChange,
                         onClear = actions.onClearLogs,
+                        onToggleExpand = actions.onToggleLogs,
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 168.dp, max = availableHeight * 0.34f)
@@ -139,6 +167,43 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
             onRunThrowing = { actions.onRunThrowing(details.entry) },
             onUnload = { actions.onUnload(details.entry) },
             onUninstall = { actions.onUninstall(details.entry) },
+            onViewCode = { actions.onViewCode(details.entry) },
+        )
+    }
+
+    state.codeViewer?.let { viewer ->
+        CodeViewerDialog(
+            pluginName = viewer.pluginName,
+            files = viewer.files,
+            onDismiss = actions.onCloseCode,
+        )
+    }
+
+    state.permissionPrompt?.let { prompt ->
+        PermissionRequestDialog(
+            pluginName = prompt.pluginName,
+            plan = prompt.plan,
+            onConfirm = { actions.onPermissionPromptResult(true) },
+            onDismiss = { actions.onPermissionPromptResult(false) },
+        )
+    }
+
+    state.specialAccessPrompt?.let { prompt ->
+        SpecialAccessDialog(
+            access = prompt.access,
+            reason = prompt.reason,
+            onConfirm = { actions.onSpecialAccessResult(true) },
+            onDismiss = { actions.onSpecialAccessResult(false) },
+        )
+    }
+
+    state.blockedDialog?.let { blocked ->
+        PermissionBlockedDialog(
+            title = stringResource(blocked.titleRes),
+            body = blocked.body,
+            canOpenSettings = blocked.canOpenSettings,
+            onOpenSettings = actions.onOpenAppSettings,
+            onDismiss = actions.onDismissBlocked,
         )
     }
 }
@@ -158,8 +223,12 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
 
         item {
             SectionHeader(
-                title = "Installed plugins",
-                subtitle = if (state.plugins.isEmpty()) "none yet" else "${state.plugins.size} installed",
+                title = stringResource(R.string.plugins_title),
+                subtitle = if (state.plugins.isEmpty()) {
+                    stringResource(R.string.plugins_none)
+                } else {
+                    stringResource(R.string.plugins_count, state.plugins.size)
+                },
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             )
         }
@@ -172,6 +241,7 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
                     entry = entry,
                     onStart = { actions.onStart(entry) },
                     onDetails = { actions.onDetails(entry) },
+                    onViewCode = { actions.onViewCode(entry) },
                 )
             }
         }
@@ -181,7 +251,7 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
 @Composable
 private fun HeaderCard(state: HostUiState, actions: HostActions) {
     Surface(
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(26.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -199,23 +269,27 @@ private fun HeaderCard(state: HostUiState, actions: HostActions) {
                         )
                     )
             )
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    ZetaLogo(size = 52.dp)
+                    Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("ZetaForge", style = MaterialTheme.typography.headlineMedium)
                         Text(
-                            "Dynamic plugin runtime",
+                            stringResource(R.string.app_name),
+                            style = MaterialTheme.typography.headlineMedium,
+                        )
+                        Text(
+                            stringResource(R.string.app_tagline),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    MetaChip("Host API " + ZetaSdk.HOST_API_VERSION)
                 }
 
                 Button(
                     onClick = actions.onImport,
                     enabled = !state.importing,
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(14.dp),
                 ) {
                     if (state.importing) {
@@ -225,11 +299,11 @@ private fun HeaderCard(state: HostUiState, actions: HostActions) {
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                         Spacer(Modifier.width(10.dp))
-                        Text("IMPORTING...")
+                        Text(stringResource(R.string.action_importing).uppercase())
                     } else {
                         Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(10.dp))
-                        Text("IMPORT PLUGIN")
+                        Text(stringResource(R.string.action_import_plugin).uppercase())
                     }
                 }
             }
@@ -256,7 +330,7 @@ private fun BannerCard(banner: HostUiState.Banner, onDismiss: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(banner.message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            TextButton(onClick = onDismiss) { Text("DISMISS") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_dismiss).uppercase()) }
         }
     }
 }
@@ -284,9 +358,9 @@ private fun EmptyState() {
                     modifier = Modifier.padding(14.dp).size(26.dp),
                 )
             }
-            Text("No plugins installed", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.plugins_empty_title), style = MaterialTheme.typography.titleMedium)
             Text(
-                "Import a .zeta package to load Kotlin code that was built outside this app.",
+                stringResource(R.string.plugins_empty_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Only present because the module is built with the Android application
+    plugin; this APK is never installed. The authoritative permission
+    declaration is the one in the .zeta manifest, produced from build.gradle.kts.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <application android:label="Files Demo Plugin" />
+</manifest>

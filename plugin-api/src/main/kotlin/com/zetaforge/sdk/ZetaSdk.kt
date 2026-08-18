@@ -20,6 +20,12 @@ object ZetaSdk {
     /** Lowest Host API version this SDK still knows how to talk to. */
     const val MIN_SUPPORTED_PLUGIN_API: Int = 1
 
-    /** Version of the `.zeta` package/manifest format understood by the runtime. */
-    const val MANIFEST_FORMAT_VERSION: Int = 1
+    /**
+     * Version of the `.zeta` package/manifest format understood by the runtime.
+     *
+     * 1 - initial format.
+     * 2 - structured permissions (reason/optional/sdk range), special access and
+     *     bundled source files. Version 1 packages keep working.
+     */
+    const val MANIFEST_FORMAT_VERSION: Int = 2
 }

@@ -24,3 +24,4 @@ include(":host")
 
 // --- Plugins (built completely separately from the Host) --------------------
 include(":plugins:retrofit-demo")
+include(":plugins:files-demo")

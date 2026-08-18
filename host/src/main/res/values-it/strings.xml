@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Italian translation. English (values/strings.xml) is the default. -->
+<resources>
+    <string name="app_tagline">Runtime per plugin dinamici</string>
+
+    <!-- Azioni -->
+    <string name="action_import_plugin">Importa plugin</string>
+    <string name="action_importing">Importazione…</string>
+    <string name="action_start">Avvia</string>
+    <string name="action_running">In esecuzione</string>
+    <string name="action_details">Dettagli</string>
+    <string name="action_view_code">Vedi codice</string>
+    <string name="action_dismiss">Chiudi</string>
+    <string name="action_close">Chiudi</string>
+    <string name="action_cancel">Annulla</string>
+    <string name="action_continue">Continua</string>
+    <string name="action_unload">Scarica</string>
+    <string name="action_uninstall">Disinstalla</string>
+    <string name="action_open_settings">Apri impostazioni</string>
+    <string name="action_clear_logs">Pulisci i log</string>
+    <string name="action_expand_logs">Espandi i log</string>
+    <string name="action_collapse_logs">Riduci i log</string>
+
+    <!-- Elenco plugin -->
+    <string name="plugins_title">Plugin installati</string>
+    <string name="plugins_none">nessuno</string>
+    <string name="plugins_count">%1$d installati</string>
+    <string name="plugins_empty_title">Nessun plugin installato</string>
+    <string name="plugins_empty_body">Importa un pacchetto .zeta per eseguire codice Kotlin compilato fuori da questa app.</string>
+    <string name="plugin_by_author">di %1$s</string>
+    <string name="plugin_version">v%1$s</string>
+    <string name="plugin_took">in %1$d ms</string>
+
+    <!-- Stato -->
+    <string name="status_success">Riuscito</string>
+    <string name="status_failed">Fallito</string>
+
+    <!-- Messaggi -->
+    <string name="banner_installed">Installato %1$s v%2$s</string>
+    <string name="banner_import_failed">Importazione fallita (%1$s): %2$s</string>
+    <string name="banner_import_unreadable">Importazione fallita: impossibile leggere il file selezionato</string>
+    <string name="banner_import_missing">Importazione fallita: nessun file in %1$s</string>
+    <string name="banner_uninstalled">Disinstallato %1$s</string>
+
+    <!-- Log -->
+    <string name="logs_title">Log</string>
+    <string name="logs_empty">Nessun record di log.</string>
+
+    <!-- Permessi -->
+    <string name="permissions_title">Permessi</string>
+    <string name="permissions_none">Questo plugin non richiede permessi.</string>
+    <string name="permissions_requested_by">%1$s richiede questi permessi</string>
+    <string name="permissions_explain_body">Il plugin gira dentro ZetaForge e usa i permessi che concedi a questa app. Nulla viene concesso finché non accetti.</string>
+    <string name="permissions_optional">facoltativo</string>
+    <string name="permissions_required">obbligatorio</string>
+    <string name="permissions_state_granted">Concesso</string>
+    <string name="permissions_state_requestable">Verrà richiesto</string>
+    <string name="permissions_state_denied">Negato definitivamente</string>
+    <string name="permissions_state_undeclared">Non disponibile in questa build</string>
+    <string name="permissions_state_not_applicable">Non serve su questa versione di Android</string>
+    <string name="permissions_denied_title">Permesso negato</string>
+    <string name="permissions_denied_body">Android non lo chiederà più. Concedilo dalle impostazioni dell\'app, poi riavvia il plugin.</string>
+    <string name="permissions_undeclared_title">Permesso non disponibile</string>
+    <string name="permissions_undeclared_body">Questa build di ZetaForge non dichiara %1$s, quindi Android non potrà mai concederlo. Aggiungilo a zetaforge.permissions e reinstalla l\'app.</string>
+    <string name="special_access_title">Accesso speciale richiesto</string>
+    <string name="special_access_body">%1$s va abilitato nelle impostazioni di Android. Ti porto sulla schermata giusta: torna qui quando hai finito.</string>
+
+    <!-- Codice -->
+    <string name="code_title">Codice del plugin</string>
+    <string name="code_subtitle">Incluso nel pacchetto, così puoi leggere cosa viene eseguito.</string>
+    <string name="code_none">Questo pacchetto non include i sorgenti.</string>
+    <string name="code_truncated">File troncato per la visualizzazione.</string>
+
+    <!-- Dettagli -->
+    <string name="details_identity">Identità</string>
+    <string name="details_package">Pacchetto</string>
+    <string name="details_requested">Richiesti</string>
+    <string name="details_bundled_deps">Dipendenze nel DEX del plugin</string>
+    <string name="details_host_deps">Fornite dall\'Host</string>
+    <string name="details_verification">Verifica</string>
+    <string name="details_last_result">Ultimo risultato</string>
+    <string name="details_scenarios">Scenari di errore (PoC)</string>
+    <string name="details_scenarios_body">Entrambi eseguono lo stesso plugin: l\'Host deve sopravvivere e riportare l\'errore.</string>
+    <string name="details_scenario_unreachable">Host irraggiungibile</string>
+    <string name="details_scenario_throw">Eccezione</string>
+    <string name="details_no_description">Nessuna descrizione disponibile.</string>
+    <string name="details_unsigned">non firmato</string>
+    <string name="details_not_loaded">non ancora caricato</string>
+    <string name="details_field_plugin_id">ID plugin</string>
+    <string name="details_field_entry_point">Entry point</string>
+    <string name="details_field_author">Autore</string>
+    <string name="details_field_homepage">Sito</string>
+    <string name="details_field_license">Licenza</string>
+    <string name="details_field_host_api">API Host</string>
+    <string name="details_field_size">Dimensione</string>
+    <string name="details_field_checksum">SHA-256</string>
+    <string name="details_field_dex">DEX</string>
+    <string name="details_field_signature">Firma</string>
+    <string name="details_field_class_loader">Class loader</string>
+    <string name="details_field_permissions">Permessi</string>
+    <string name="details_field_capabilities">Capacità</string>
+    <string name="details_field_status">Stato</string>
+    <string name="details_field_message">Messaggio</string>
+    <string name="details_field_duration">Durata</string>
+    <string name="details_field_error_code">Codice errore</string>
+    <string name="details_field_format">Formato</string>
+    <string name="details_field_min_sdk">SDK minimo</string>
+</resources>
