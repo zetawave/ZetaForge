@@ -2,15 +2,16 @@
 # ---------------------------------------------------------------------------
 # ZetaForge - one-shot development loop.
 #
-#   ./run.sh                 build plugin + Host, install, import the .zeta,
-#                            launch the app and execute the plugin
-#   ./run.sh --logs          same, then follow the ZetaForge log stream
-#   ./run.sh --host-only     rebuild/install only the Host (fast UI loop)
-#   ./run.sh --plugin-only   rebuild the plugin, re-import it, run it
-#   ./run.sh --no-run        stop after import (do not execute the plugin)
-#   ./run.sh --fresh         wipe app data first (clean install state)
+#   ./run.sh                 build plugin + Host, install and launch the app
+#                            (nothing is imported or executed: you drive the UI)
+#   ./run.sh --import        also import retrofit-demo.zeta into the Host
+#   ./run.sh --run           also import it and execute the plugin
 #   ./run.sh --scenario throw|unreachable
-#                            run the failure paths instead of the happy path
+#                            run the failure paths (implies --run)
+#   ./run.sh --logs          follow the ZetaForge log stream at the end
+#   ./run.sh --host-only     skip the plugin build (fast UI loop)
+#   ./run.sh --plugin-only   skip the Host build (rebuild the .zeta only)
+#   ./run.sh --fresh         wipe app data first (clean install state)
 #   ./run.sh --test          also run unit + instrumented acceptance tests
 #   ./run.sh --clean         gradle clean before building
 #   ./run.sh -s <serial>     target a specific device (default: autodetected)
@@ -42,8 +43,8 @@ ACTION_RUN="com.zetaforge.app.action.RUN_PLUGIN"
 # --- options ---------------------------------------------------------------
 BUILD_HOST=1
 BUILD_PLUGIN=1
-DO_IMPORT=1
-DO_RUN=1
+DO_IMPORT=0        # opt-in: the app is only launched by default
+DO_RUN=0           # opt-in: implies DO_IMPORT
 DO_LOGS=0
 DO_TEST=0
 DO_CLEAN=0
@@ -53,21 +54,27 @@ SERIAL="${ANDROID_SERIAL:-}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --host-only)   BUILD_PLUGIN=0; DO_IMPORT=0; DO_RUN=0 ;;
+    --import|-i)   DO_IMPORT=1 ;;
+    --run|-r)      DO_IMPORT=1; DO_RUN=1 ;;
+    --scenario)    shift; SCENARIO="${1:-}"; DO_IMPORT=1; DO_RUN=1 ;;
+    --host-only)   BUILD_PLUGIN=0 ;;
     --plugin-only) BUILD_HOST=0 ;;
-    --no-import)   DO_IMPORT=0; DO_RUN=0 ;;
-    --no-run)      DO_RUN=0 ;;
     --logs|-l)     DO_LOGS=1 ;;
     --test|-t)     DO_TEST=1 ;;
     --clean)       DO_CLEAN=1 ;;
     --fresh)       FRESH=1 ;;
-    --scenario)    shift; SCENARIO="${1:-}" ;;
     -s|--serial)   shift; SERIAL="${1:-}" ;;
     -h|--help)     sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1 (try --help)" >&2; exit 2 ;;
   esac
   shift
 done
+
+# --host-only means "do not touch the plugin at all".
+if [ "$BUILD_PLUGIN" = "0" ] && [ "$DO_IMPORT" = "1" ] && [ ! -f "plugins/retrofit-demo/build/zetaforge/retrofit-demo.zeta" ]; then
+  echo "--host-only was given but no .zeta exists yet; build it with ./run.sh --plugin-only" >&2
+  exit 2
+fi
 
 # --- helpers ---------------------------------------------------------------
 step()  { printf '\033[1;36m==>\033[0m \033[1m%s\033[0m\n' "$*"; }
@@ -167,11 +174,13 @@ if [ "$FRESH" = "1" ]; then
 fi
 
 step "Launching the app"
+# Always start from a fresh process so the log below covers this run only.
+adbx shell am force-stop "$HOST_PACKAGE" >/dev/null 2>&1 || true
 adbx shell am start -n "$MAIN_ACTIVITY" >/dev/null
 until adbx shell pidof "$HOST_PACKAGE" >/dev/null 2>&1; do sleep 1; done
-# `logcat -c` is unreliable on emulators, so the dump is filtered by the pid of
-# the process we just started instead.
-APP_PID="$(adbx shell pidof "$HOST_PACKAGE" | tr -d '' | awk '{print $1}')"
+# `logcat -c` is unreliable on emulators, so the dump is filtered by the pid
+# of the process we just started instead.
+APP_PID="$(adbx shell pidof "$HOST_PACKAGE" | tr -dc '0-9 ' | awk '{print $1}')"
 LOG_SINCE="$(adbx shell date "+%m-%d %H:%M:%S.000" | tr -d '\r')"
 
 if [ "$DO_IMPORT" = "1" ]; then
@@ -200,12 +209,18 @@ if [ "$DO_RUN" = "1" ]; then
   sleep 4
 fi
 
-LOG_DUMP="$(adbx logcat -d 2>/dev/null || true)"
+# Give the runtime a moment to emit its first records (the app has just been
+# started, and with --host-only nothing else waits on it).
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  LOG_DUMP="$(adbx logcat -d ${APP_PID:+--pid="$APP_PID"} 2>/dev/null || true)"
+  case "$LOG_DUMP" in *ZetaForge/*) break ;; esac
+  sleep 1
+done
 
 # `grep -q` would close the pipe early and, under `set -o pipefail`, report a
 # failure for the whole pipeline; collect the lines instead.
-ZETA_LOG="$(echo "$LOG_DUMP" | grep -E "ZetaForge/" | grep -E "[[:space:]]$APP_PID[[:space:]]" || true)"
-CRASHES="$(echo "$LOG_DUMP" | grep -A3 -E "FATAL EXCEPTION" | grep -E "$HOST_PACKAGE|[[:space:]]$APP_PID[[:space:]]" || true)"
+ZETA_LOG="$(echo "$LOG_DUMP" | grep -E "ZetaForge/" || true)"
+CRASHES="$(echo "$LOG_DUMP" | grep -E "FATAL EXCEPTION" || true)"
 
 step "ZetaForge log"
 if [ -n "$ZETA_LOG" ]; then
@@ -223,9 +238,13 @@ if [ "$DO_RUN" = "1" ]; then
   [ -n "$OUTCOME" ] && step "Result: $OUTCOME"
 fi
 
+if [ "$DO_IMPORT" = "0" ]; then
+  info "app running - import a plugin from the UI, or re-run with --import / --run"
+fi
+
 ok "done in $(( $(date +%s) - START_TS ))s"
 
 if [ "$DO_LOGS" = "1" ]; then
   step "Following logs (Ctrl-C to stop)"
-  adbx logcat -v time | grep --line-buffered -E "ZetaForge/"
+  adbx logcat -v time ${APP_PID:+--pid="$APP_PID"} | grep --line-buffered -E "ZetaForge/"
 fi

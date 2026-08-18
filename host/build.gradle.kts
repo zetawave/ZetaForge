@@ -1,3 +1,4 @@
+import java.util.Properties
 import java.util.zip.ZipFile
 
 plugins {
@@ -5,6 +6,29 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
+
+/**
+ * Release signing is configured from `keystore.properties`, which is git-ignored
+ * and never committed. Create it with `./scripts/make-keystore` (or by hand):
+ *
+ *     storeFile=keystore/zetaforge-release.jks
+ *     storePassword=...
+ *     keyAlias=zetaforge
+ *     keyPassword=...
+ *
+ * `storeFile` may be absolute or relative to the repository root. When the file
+ * is absent, debug builds keep working and `assembleRelease` produces an
+ * unsigned APK instead of failing at configuration time.
+ */
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.isFile) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+val releaseKeystore: File? = keystoreProperties.getProperty("storeFile")
+    ?.let { path -> File(path).takeIf { it.isAbsolute } ?: rootProject.file(path) }
+    ?.takeIf { it.isFile }
 
 android {
     namespace = rootProject.extra["zetaforge.host.package"] as String
@@ -20,13 +44,29 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
         }
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

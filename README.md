@@ -397,27 +397,31 @@ garbage package.
 
 ### The fast loop: `run.sh`
 
-One command builds everything, installs it on the connected device, imports the
-plugin and runs it:
+By default it builds, installs and **launches** the app - nothing is imported or
+executed, so you drive the UI yourself:
 
 ```bash
-./run.sh                      # build plugin + Host, install, import, run, print the log
-./run.sh --logs               # ... and keep following the log stream
-./run.sh --host-only          # only rebuild/install the Host (fast UI loop)
-./run.sh --plugin-only        # only rebuild the plugin, re-import it, run it
-./run.sh --fresh              # wipe app data first
-./run.sh --scenario throw         # failure path: the plugin throws
+./run.sh                      # build plugin + Host, install, launch
+./run.sh --import             # ... and import retrofit-demo.zeta
+./run.sh --run                # ... and import it, then execute the plugin
+./run.sh --scenario throw         # failure path: the plugin throws (implies --run)
 ./run.sh --scenario unreachable   # failure path: unreachable endpoint
+./run.sh --logs               # follow the log stream at the end
+./run.sh --host-only          # skip the plugin build (fast UI loop)
+./run.sh --plugin-only        # skip the Host build (rebuild the .zeta only)
+./run.sh --fresh              # wipe app data first
 ./run.sh --test               # also run unit + instrumented acceptance tests
 ./run.sh --clean              # gradle clean first
 ./run.sh -s emulator-5554     # target a specific device
+./run.sh --help
 ```
 
 The device is autodetected (a single attached device, or the running emulator);
-with several devices connected it stops and asks for `-s`. `run.bat` is the
-Windows wrapper.
+with several devices connected it stops and asks for `-s`. The app is always
+restarted, and the log printed at the end is filtered to that process.
+`run.bat` is the Windows wrapper.
 
-Import and execution are driven through two **debug-only** intents handled by
+`--import` / `--run` go through two **debug-only** intents handled by
 `MainActivity` (`com.zetaforge.app.action.IMPORT_FILE` / `.RUN_PLUGIN`), guarded
 by `BuildConfig.DEBUG`: the archive is streamed into the app's own cache with
 `run-as` and imported through the exact same runtime pipeline as a SAF pick. In
@@ -434,11 +438,54 @@ Typical output:
 ==> Running com.zetaforge.plugins.retrofitdemo
 ==> ZetaForge log
     ... Class loader: DELEGATE_LAST over code.jar (415561 bytes)
-    ... Retrofit initialized (baseUrl=https://postman-echo.com/)
     ... HTTP 200 (639 ms, 187 chars)
 ==> Result: SUCCESS - HTTP 200 in 639 ms (187 chars) (758 ms)
 [ ok ] done in 20s
 ```
+
+### Release build and signing
+
+Create the signing key once (Git Bash):
+
+```bash
+./scripts/make-keystore                       # asks for the password
+# or fully non-interactive:
+./scripts/make-keystore --alias zetaforge --password '<your-password>' --cn 'Your Name'
+```
+
+It writes `keystore/zetaforge-release.jks` (PKCS12, RSA 4096, 30 years) and
+`keystore.properties`; both are git-ignored, and the script verifies that before
+finishing. Back the keystore up outside the repository: without it you can never
+update an already published build.
+
+```properties
+# keystore.properties - read by host/build.gradle.kts, never committed
+storeFile=keystore/zetaforge-release.jks
+storePassword=...
+keyAlias=zetaforge
+keyPassword=...
+```
+
+Then:
+
+```bash
+./gradlew :host:assembleRelease
+# -> host/build/outputs/apk/release/host-release.apk   (~1.9 MB, signed v2+v3)
+"$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs -v     host/build/outputs/apk/release/host-release.apk
+```
+
+Without `keystore.properties` the release build still runs and produces an
+unsigned APK, so CI and contributors are never blocked.
+
+**R8 and the plugin ABI.** A plugin host cannot be shrunk like a normal app:
+plugins declare the Kotlin stdlib and coroutines as `compileOnly` and expect the
+Host to provide them, but R8 only sees what the *Host* uses. Minifying without
+care produced a real failure (`ClassNotFoundException: kotlin.Unit` when running
+the plugin from a release build), so [host/proguard-rules.pro](host/proguard-rules.pro)
+keeps the whole shared runtime (`kotlin.**`, `kotlinx.coroutines.**`,
+`com.zetaforge.sdk.**` and every `ZetaPlugin` implementation). Cost: ~0.5 MB of
+APK. Verified: with those rules the minified release build imports and runs the
+plugin exactly like the debug build.
 
 ### Single-purpose scripts
 
@@ -450,6 +497,7 @@ Typical output:
 ./scripts/install-plugin   # adb push the .zeta to /sdcard/Download
 ./scripts/run-plugin       # connected acceptance test (build -> import -> run)
 ./scripts/logs             # adb logcat filtered on ZetaForge / RetrofitDemo
+./scripts/make-keystore    # generate the release signing key + keystore.properties
 ./scripts/clean            # remove all build output
 ```
 

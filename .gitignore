@@ -26,6 +26,7 @@ lint-results*.xml
 # --- Secrets: never commit -------------------------------------------------
 *.jks
 *.keystore
+keystore/
 keystore.properties
 signing.properties
 secrets.properties
