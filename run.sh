@@ -30,7 +30,6 @@ export MSYS2_ARG_CONV_EXCL='*'
 
 HOST_MODULE=":host"
 PLUGIN_NAME="retrofit-demo"
-ALL_PLUGINS="retrofit-demo files-demo"
 HOST_APK="host/build/outputs/apk/debug/host-debug.apk"
 HOST_PACKAGE="com.zetaforge.app"
 MAIN_ACTIVITY="$HOST_PACKAGE/.MainActivity"
@@ -71,17 +70,45 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# Which plugins this invocation works on.
+# Plugins live in plugins/ (public) and plugins-local/ (private, git-ignored).
+plugin_dir() {
+  for base in plugins plugins-local; do
+    [ -f "$base/$1/build.gradle.kts" ] && { echo "$base/$1"; return 0; }
+  done
+  return 1
+}
+
+gradle_path() {
+  local dir; dir="$(plugin_dir "$1")" || return 1
+  echo ":${dir%%/*}:$1"
+}
+
+all_plugins() {
+  for base in plugins plugins-local; do
+    [ -d "$base" ] || continue
+    for dir in "$base"/*/; do
+      [ -f "$dir/build.gradle.kts" ] && basename "$dir"
+    done
+  done
+}
+
 if [ "$PLUGIN_NAME" = "all" ]; then
-  SELECTED_PLUGINS="$ALL_PLUGINS"
+  SELECTED_PLUGINS="$(all_plugins | tr '
+' ' ')"
 else
   SELECTED_PLUGINS="$PLUGIN_NAME"
 fi
 for name in $SELECTED_PLUGINS; do
-  [ -d "plugins/$name" ] || { echo "Unknown plugin '$name' (looked for plugins/$name)" >&2; exit 2; }
+  plugin_dir "$name" >/dev/null || {
+    echo "Unknown plugin '$name' (looked in plugins/ and plugins-local/)" >&2
+    exit 2
+  }
 done
 
-zeta_path() { echo "plugins/$1/build/zetaforge/$1.zeta"; }
+zeta_path() {
+  local dir; dir="$(plugin_dir "$1")" || return 1
+  echo "$dir/build/zetaforge/$1.zeta"
+}
 plugin_id() {
   # The id lives in the produced manifest: no duplication in this script.
   local zeta
@@ -166,7 +193,7 @@ fi
 
 GRADLE_TARGETS=()
 if [ "$BUILD_PLUGIN" = "1" ]; then
-  for name in $SELECTED_PLUGINS; do GRADLE_TARGETS+=(":plugins:$name:buildZetaPlugin"); done
+  for name in $SELECTED_PLUGINS; do GRADLE_TARGETS+=("$(gradle_path "$name"):buildZetaPlugin"); done
 fi
 [ "$BUILD_HOST" = "1" ] && GRADLE_TARGETS+=("$HOST_MODULE:assembleDebug")
 

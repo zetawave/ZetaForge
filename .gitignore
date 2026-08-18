@@ -18,6 +18,12 @@ local.properties
 lint-results*.html
 lint-results*.xml
 
+# --- Collected artifacts (scripts/release) ---------------------------------
+dist/
+
+# --- Private plugins: yours, never published -------------------------------
+plugins-local/
+
 # --- ZetaForge plugin artifacts (rebuild them, never commit) ---------------
 *.zeta
 *.zeta.sha256

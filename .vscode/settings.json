@@ -1,7 +1,10 @@
 {
+  // Build directories are hidden to keep the tree readable. Artifacts are
+  // collected into dist/ by scripts/release, which stays visible.
   "files.exclude": {
     "**/build": true,
-    "**/.gradle": true
+    "**/.gradle": true,
+    "**/.kotlin": true
   },
   "java.configuration.updateBuildConfiguration": "disabled",
   "kotlin.languageServer.enabled": true,

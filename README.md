@@ -588,6 +588,44 @@ keeps the whole shared runtime (`kotlin.**`, `kotlinx.coroutines.**`,
 APK. Verified: with those rules the minified release build imports and runs the
 plugin exactly like the debug build.
 
+### Shippable artifacts: `scripts/release`
+
+Gradle writes into each module's own `build/` directory, which is why there is no
+`build/` folder with artifacts at the repository root (and why the VS Code tree
+hides them). One command builds what you ship and collects it in `dist/`:
+
+```bash
+./scripts/release                 # release APK + every plugin .zeta
+./scripts/release --debug         # debug APK instead of release
+./scripts/release --host          # only the Host APK
+./scripts/release --plugins       # only the plugin packages
+./scripts/release --plugin files-demo
+./scripts/release --clean
+```
+
+```
+==> Artifacts in dist/
+     host-release.apk                 2.9M  c01ee0d1922f5038…
+     files-demo.zeta                   20K  8d9e4e18326a5590…
+     retrofit-demo.zeta              1004K  cc4c68e244dcc395…
+
+==> Host APK
+     signed by CN=ZetaForge, O=ZetaForge, C=IT
+     install: adb install -r dist/host-release.apk
+```
+
+The script deletes the previous outputs before building, so `dist/` can never
+contain a stale artifact, and it reports the APK's real signing state - an
+unsigned release APK looks normal until `adb install` refuses it.
+
+Where the raw Gradle outputs live, if you want them directly:
+
+| Artifact | Command | Path |
+|---|---|---|
+| Host APK (release) | `./gradlew :host:assembleRelease` | `host/build/outputs/apk/release/host-release.apk` |
+| Host APK (debug) | `./gradlew :host:assembleDebug` | `host/build/outputs/apk/debug/host-debug.apk` |
+| Plugin package | `./gradlew :plugins:retrofit-demo:buildZetaPlugin` | `plugins/retrofit-demo/build/zetaforge/retrofit-demo.zeta` |
+
 ### Single-purpose scripts
 
 ```bash
@@ -598,6 +636,7 @@ plugin exactly like the debug build.
 ./scripts/install-plugin   # adb push the .zeta to /sdcard/Download
 ./scripts/run-plugin       # connected acceptance test (build -> import -> run)
 ./scripts/logs             # adb logcat filtered on ZetaForge / RetrofitDemo
+./scripts/release          # build APK + .zeta and collect them in dist/
 ./scripts/make-keystore    # generate the release signing key + keystore.properties
 ./scripts/clean            # remove all build output
 ```

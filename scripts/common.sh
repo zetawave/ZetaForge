@@ -18,6 +18,7 @@ log()  { printf '\033[36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m[warn]\033[0m %s\n' "$*"; }
 fail() { printf '\033[31m[fail]\033[0m %s\n' "$*" >&2; exit 1; }
 ok()   { printf '\033[32m[ ok ]\033[0m %s\n' "$*"; }
+info() { printf '     %s\n' "$*"; }
 
 adb_bin() {
   if command -v adb >/dev/null 2>&1; then
