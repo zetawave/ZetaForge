@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -60,12 +61,27 @@ class PluginExecutionService : Service() {
 
         if (observer == null) {
             observer = scope.launch {
+                // The service is started just *before* the runtime publishes the
+                // task, so the first value observed is null. Stopping on it would
+                // kill the service before the plugin even begins - which is
+                // exactly what used to happen, leaving no notification and no
+                // protection from the process being frozen.
+                var started = false
+                launch {
+                    delay(STARTUP_GRACE_MS)
+                    if (!started) stopSelf()
+                }
+
                 ZetaTaskCenter.current.collectLatest { task ->
-                    if (task == null) {
-                        stopSelf()
-                    } else {
-                        NotificationManagerCompat.from(this@PluginExecutionService)
-                            .notify(NOTIFICATION_ID, buildNotification(task))
+                    when {
+                        task != null -> {
+                            started = true
+                            NotificationManagerCompat.from(this@PluginExecutionService)
+                                .notify(NOTIFICATION_ID, buildNotification(task))
+                        }
+
+                        started -> stopSelf()
+                        else -> Unit // still waiting for the run to be published
                     }
                 }
             }
@@ -144,6 +160,9 @@ class PluginExecutionService : Service() {
         private const val CHANNEL_ID = "zetaforge.plugin.runs"
         private const val NOTIFICATION_ID = 4201
         private const val ACTION_STOP = "com.zetaforge.app.action.STOP_PLUGIN"
+
+        /** How long to wait for the run to be published before giving up. */
+        private const val STARTUP_GRACE_MS = 20_000L
 
         /**
          * Started while the app is in the foreground - which it is, since a run
