@@ -92,6 +92,49 @@ class PluginExecutionService : Service() {
         return START_NOT_STICKY
     }
 
+    /**
+     * Android 15+ caps a `dataSync` foreground service at roughly six hours a
+     * day. When the budget runs out the system calls this and expects the
+     * service to be gone within seconds - failing to comply crashes the app.
+     *
+     * So the run is asked to stop the same way the notification's Stop button
+     * does: the plugin's state is already on disk, so the work resumes on the
+     * next START rather than being lost.
+     */
+    override fun onTimeout(startId: Int) {
+        handleTimeout()
+    }
+
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        handleTimeout()
+    }
+
+    private fun handleTimeout() {
+        val task = ZetaTaskCenter.current.value
+        if (task != null) {
+            ZetaTaskCenter.requestCancel(task.pluginId)
+            notifyStopped(task.pluginName)
+        }
+        stopSelf()
+    }
+
+    /**
+     * Leaves a dismissible notice behind: the run stopped for a system limit,
+     * not because the work is done, and the user has to press START again.
+     */
+    private fun notifyStopped(pluginName: String) {
+        runCatching {
+            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_warning)
+                .setContentTitle(pluginName)
+                .setContentText(getString(R.string.notification_time_limit))
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
+                .build()
+            NotificationManagerCompat.from(this).notify(NOTIFICATION_ID + 1, notification)
+        }
+    }
+
     override fun onDestroy() {
         observer?.cancel()
         scope.cancel()

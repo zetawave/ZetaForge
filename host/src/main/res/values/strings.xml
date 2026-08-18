@@ -59,6 +59,7 @@
     <string name="notification_channel_runs_description">Keeps a running plugin alive and shows its progress.</string>
     <string name="notification_running">Running…</string>
     <string name="notification_stop">Stop</string>
+    <string name="notification_time_limit">Paused by Android after 6 hours of background work. Open ZetaForge and press START to resume.</string>
 
     <!-- Logs -->
     <string name="logs_title">Logs</string>
