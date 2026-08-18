@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Removes all build output (Host, runtime, plugins, builder).
+source "$(dirname "$0")/common.sh"
+gradle_run clean
+rm -rf "$ROOT_DIR"/*/build "$ROOT_DIR"/plugins/*/build "$ROOT_DIR"/plugin-builder/build
+ok "clean"

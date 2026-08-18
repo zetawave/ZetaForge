@@ -1,0 +1,9 @@
+{
+  "files.exclude": {
+    "**/build": true,
+    "**/.gradle": true
+  },
+  "java.configuration.updateBuildConfiguration": "disabled",
+  "kotlin.languageServer.enabled": true,
+  "terminal.integrated.defaultProfile.windows": "Git Bash"
+}

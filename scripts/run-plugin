@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Runs the full acceptance chain on a device: build, install, import, execute.
+# Uses the instrumented acceptance test, which drives the runtime end to end.
+source "$(dirname "$0")/common.sh"
+require_device
+gradle_run "$HOST_MODULE:connectedDebugAndroidTest" "$@"
+ok "acceptance test finished - see host/build/reports/androidTests/connected/"

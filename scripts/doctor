@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Checks that the environment can build and run ZetaForge without Android Studio.
+source "$(dirname "$0")/common.sh"
+
+status=0
+check() { if eval "$2" >/dev/null 2>&1; then ok "$1"; else warn "$1 -- MISSING"; status=1; fi; }
+
+log "ZetaForge doctor"
+
+if command -v java >/dev/null 2>&1; then
+  ok "java: $(java -version 2>&1 | head -1)"
+else
+  warn "java not on PATH"; status=1
+fi
+[ -n "${JAVA_HOME:-}" ] && ok "JAVA_HOME=$JAVA_HOME" || warn "JAVA_HOME not set"
+
+SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+if [ -n "$SDK" ] && [ -d "$SDK" ]; then
+  ok "Android SDK: $SDK"
+  echo "     platforms   : $(ls "$SDK/platforms" 2>/dev/null | tr '\n' ' ')"
+  echo "     build-tools : $(ls "$SDK/build-tools" 2>/dev/null | tr '\n' ' ')"
+  for bt in "$SDK/build-tools"/*; do
+    if [ -f "$bt/d8.bat" ] || [ -f "$bt/d8" ]; then ok "d8 available in $(basename "$bt")"; break; fi
+  done
+else
+  warn "ANDROID_HOME / ANDROID_SDK_ROOT not set"; status=1
+fi
+
+check "adb" "adb_bin"
+check "gradle wrapper" "[ -x '$GRADLEW' ]"
+check "local.properties" "[ -f '$ROOT_DIR/local.properties' ]"
+
+adb="$(adb_bin 2>/dev/null || true)"
+if [ -n "$adb" ]; then
+  echo "     devices     :"
+  "$adb" devices | tail -n +2 | sed 's/^/       /'
+fi
+
+log "Toolchain pinned by the project"
+grep -E '^(agp|kotlin|composeBom) =' "$ROOT_DIR/gradle/libs.versions.toml" | sed 's/^/     /'
+grep -E '^zetaforge\.(compileSdk|minSdk|targetSdk|jvmTarget)' "$ROOT_DIR/zetaforge.properties" | sed 's/^/     /'
+
+exit $status

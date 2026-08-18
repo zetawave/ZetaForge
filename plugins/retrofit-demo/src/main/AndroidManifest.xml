@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    This manifest exists only because the module is built with the Android
+    application plugin. The APK is never installed: only its DEX is shipped
+    inside the .zeta archive. The permission below documents what the plugin
+    needs the *Host* to hold; the authoritative declaration is in the .zeta
+    manifest.json, which the Host reads at import time.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application android:label="Retrofit Demo Plugin" />
+
+</manifest>

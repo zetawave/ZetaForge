@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Installs (or reinstalls) the Host on the connected device/emulator.
+source "$(dirname "$0")/common.sh"
+[ -f "$HOST_APK" ] || gradle_run "$HOST_MODULE:assembleDebug"
+require_device
+adb="$(adb_bin)"
+log "adb install -r"
+"$adb" install -r "$HOST_APK"
+ok "installed $HOST_PACKAGE"

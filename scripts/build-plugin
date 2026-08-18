@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Builds the demo plugin and packages it as a single .zeta archive.
+source "$(dirname "$0")/common.sh"
+gradle_run "$PLUGIN_MODULE:buildZetaPlugin" "$@"
+ok "artifact: $PLUGIN_ZETA"

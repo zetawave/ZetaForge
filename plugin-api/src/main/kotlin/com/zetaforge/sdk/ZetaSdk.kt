@@ -1,0 +1,25 @@
+package com.zetaforge.sdk
+
+/**
+ * Version marker of the Host <-> plugin contract.
+ *
+ * Every `.zeta` manifest declares `minHostApi` / `maxHostApi`. The runtime
+ * refuses to load a plugin whose declared range does not contain
+ * [ZetaSdk.HOST_API_VERSION], so the contract can evolve without silently
+ * breaking already published plugins.
+ *
+ * Bump [HOST_API_VERSION] whenever anything in this module changes in a way an
+ * already compiled plugin could observe (signatures, semantics, new required
+ * members on [ZetaPlugin], ...).
+ */
+object ZetaSdk {
+
+    /** Current Host API version implemented by this SDK build. */
+    const val HOST_API_VERSION: Int = 1
+
+    /** Lowest Host API version this SDK still knows how to talk to. */
+    const val MIN_SUPPORTED_PLUGIN_API: Int = 1
+
+    /** Version of the `.zeta` package/manifest format understood by the runtime. */
+    const val MANIFEST_FORMAT_VERSION: Int = 1
+}

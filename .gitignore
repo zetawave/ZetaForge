@@ -1,0 +1,49 @@
+# --- Gradle / build output -------------------------------------------------
+.gradle/
+build/
+*/build/
+plugins/*/build/
+plugin-builder/build/
+out/
+captures/
+
+# --- Android ---------------------------------------------------------------
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+.cxx/
+lint-results*.html
+lint-results*.xml
+
+# --- ZetaForge plugin artifacts (rebuild them, never commit) ---------------
+*.zeta
+*.zeta.sha256
+**/build/zetaforge/
+
+# --- Secrets: never commit -------------------------------------------------
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+secrets.properties
+google-services.json
+*.pem
+*.p12
+
+# --- IDEs ------------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.kotlin/
+
+# --- OS --------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini

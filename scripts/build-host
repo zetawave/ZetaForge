@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Builds the Host APK and verifies it does not embed plugin-only libraries.
+source "$(dirname "$0")/common.sh"
+gradle_run "$HOST_MODULE:assembleDebug" "$@"
+ok "APK: $HOST_APK"

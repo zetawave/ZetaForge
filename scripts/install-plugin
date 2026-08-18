@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Pushes the .zeta to the device so it can be picked with IMPORT PLUGIN.
+source "$(dirname "$0")/common.sh"
+[ -f "$PLUGIN_ZETA" ] || gradle_run "$PLUGIN_MODULE:buildZetaPlugin"
+require_device
+adb="$(adb_bin)"
+"$adb" push "$PLUGIN_ZETA" "$DEVICE_ZETA_DIR/retrofit-demo.zeta"
+"$adb" shell "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://$DEVICE_ZETA_DIR/retrofit-demo.zeta" >/dev/null 2>&1 || true
+ok "pushed to $DEVICE_ZETA_DIR/retrofit-demo.zeta - open ZetaForge and tap IMPORT PLUGIN"

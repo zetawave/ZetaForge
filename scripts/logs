@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Follows the structured ZetaForge log stream from the device.
+source "$(dirname "$0")/common.sh"
+require_device
+adb="$(adb_bin)"
+"$adb" logcat -v time | grep --line-buffered -E "ZetaForge|RetrofitDemo"

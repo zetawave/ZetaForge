@@ -1,0 +1,161 @@
+import java.util.zip.ZipFile
+
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+}
+
+android {
+    namespace = rootProject.extra["zetaforge.host.package"] as String
+    compileSdk = (rootProject.extra["zetaforge.compileSdk"] as String).toInt()
+
+    defaultConfig {
+        applicationId = rootProject.extra["zetaforge.host.package"] as String
+        minSdk = (rootProject.extra["zetaforge.minSdk"] as String).toInt()
+        targetSdk = (rootProject.extra["zetaforge.targetSdk"] as String).toInt()
+        versionCode = (rootProject.extra["zetaforge.versionCode"] as String).toInt()
+        versionName = rootProject.extra["zetaforge.versionName"] as String
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        debug {
+            isMinifyEnabled = false
+        }
+        release {
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+    }
+
+    buildFeatures {
+        compose = true
+        // BuildConfig.DEBUG gates the adb-driven developer hooks in MainActivity.
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        getByName("androidTest") {
+            // The instrumented acceptance test consumes the real .zeta artifact,
+            // copied here by the `copyDemoPluginAsset` task below.
+            assets.srcDir(layout.buildDirectory.dir("generated/zetaAssets"))
+        }
+    }
+
+    packaging {
+        resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}")
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
+dependencies {
+    implementation(project(":runtime"))
+
+    implementation(libs.kotlin.stdlib)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.documentfile)
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.extended)
+    debugImplementation(libs.compose.ui.tooling)
+
+    testImplementation(libs.junit)
+
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+}
+
+/**
+ * Makes the freshly built `retrofit-demo.zeta` available to the instrumented
+ * acceptance test as an asset. This is the only link between Host and plugin,
+ * and it exists purely for testing: at runtime the Host knows nothing about any
+ * specific plugin.
+ */
+val demoPluginArtifact = tasks.register<Copy>("copyDemoPluginAsset") {
+    dependsOn(":plugins:retrofit-demo:buildZetaPlugin")
+    from(project(":plugins:retrofit-demo").layout.buildDirectory.dir("zetaforge")) {
+        include("*.zeta")
+    }
+    into(layout.buildDirectory.dir("generated/zetaAssets"))
+}
+
+tasks.withType<com.android.build.gradle.tasks.MergeSourceSetFolders>().configureEach {
+    if (name.contains("AndroidTest", ignoreCase = true)) {
+        dependsOn(demoPluginArtifact)
+    }
+}
+
+/**
+ * Verifies requirement #29: Retrofit/OkHttp must NOT be part of the Host APK.
+ * The check inspects the DEX of the built APK, so it fails if the dependency is
+ * ever added by mistake (directly or transitively).
+ */
+val verifyHostApk = tasks.register("verifyHostHasNoRetrofit") {
+    group = "verification"
+    description = "Fails if the Host APK contains Retrofit/OkHttp classes."
+
+    val apkDir = layout.buildDirectory.dir("outputs/apk/debug")
+    val reportFile = layout.buildDirectory.file("reports/zetaforge/host-apk-verification.txt")
+    outputs.file(reportFile)
+
+    doLast {
+        val apk = apkDir.get().asFile.listFiles()?.firstOrNull { it.extension == "apk" }
+            ?: throw GradleException("No Host APK found in ${apkDir.get().asFile}. Run assembleDebug first.")
+
+        val forbidden = listOf("Lretrofit2/", "Lokhttp3/", "Lokio/")
+        val found = mutableListOf<String>()
+        ZipFile(apk).use { zip ->
+            zip.entries().asSequence()
+                .filter { it.name.matches(Regex("classes\\d*\\.dex")) }
+                .forEach { entry ->
+                    val bytes = zip.getInputStream(entry).use { it.readBytes() }
+                    val text = String(bytes, Charsets.ISO_8859_1)
+                    forbidden.forEach { marker ->
+                        if (text.contains(marker)) found += "${entry.name}: $marker"
+                    }
+                }
+        }
+
+        val report = buildString {
+            appendLine("ZetaForge Host APK verification")
+            appendLine("apk      : ${apk.absolutePath}")
+            appendLine("size     : ${apk.length()} bytes")
+            appendLine("forbidden: ${forbidden.joinToString()}")
+            appendLine(if (found.isEmpty()) "result   : PASS - no plugin-only library found in the Host APK"
+            else "result   : FAIL - ${found.joinToString()}")
+        }
+        reportFile.get().asFile.parentFile.mkdirs()
+        reportFile.get().asFile.writeText(report)
+        logger.lifecycle("\n$report")
+
+        if (found.isNotEmpty()) {
+            throw GradleException("Host APK must not contain plugin-only libraries: ${found.joinToString()}")
+        }
+    }
+}
+
+// AGP registers `assembleDebug` late, so match lazily instead of resolving now.
+tasks.matching { it.name == "assembleDebug" }.configureEach { finalizedBy(verifyHostApk) }
