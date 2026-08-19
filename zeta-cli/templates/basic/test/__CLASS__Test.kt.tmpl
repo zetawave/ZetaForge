@@ -1,0 +1,29 @@
+package {{PACKAGE}}
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/**
+ * Tests that run on the JVM, in milliseconds, with no device attached.
+ *
+ * `zeta test` runs these. Keep the logic worth testing out of [execute] — which
+ * needs a real Context — and into plain functions like the one below, and most
+ * of a plugin becomes testable without Android at all.
+ */
+class {{CLASS}}Test {
+
+    @Test
+    fun `identity matches the manifest`() {
+        val plugin = {{CLASS}}()
+        assertEquals("{{PLUGIN_ID}}", plugin.id)
+        assertTrue(plugin.version.isNotBlank())
+    }
+
+    @Test
+    fun `shouting upper-cases and adds emphasis`() {
+        assertEquals("HELLO!", shout("Hello"))
+    }
+}
+
+private fun shout(text: String) = "${text.uppercase()}!"

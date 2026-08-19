@@ -1,0 +1,73 @@
+package {{PACKAGE}}
+
+import android.content.Context
+import android.os.Bundle
+import com.zetaforge.sdk.PluginResult
+import com.zetaforge.sdk.ZetaLog
+import com.zetaforge.sdk.ZetaPlugin
+import okhttp3.OkHttpClient
+import retrofit2.Retrofit
+import retrofit2.converter.scalars.ScalarsConverterFactory
+import retrofit2.http.GET
+import retrofit2.http.Query
+import java.util.concurrent.TimeUnit
+
+/**
+ * {{DISPLAY_NAME}}.
+ *
+ * Retrofit and OkHttp are compiled into this plugin's own DEX. The Host has
+ * never heard of them, and its APK does not contain a byte of either — which is
+ * the whole point: a plugin brings its own libraries, and two plugins can use
+ * different versions of the same one without knowing about each other.
+ */
+class {{CLASS}} : ZetaPlugin {
+
+    override val id = "{{PLUGIN_ID}}"
+    override val name = "{{DISPLAY_NAME}}"
+    override val version = "1.0.0"
+
+    private interface Api {
+        @GET("get")
+        suspend fun echo(@Query("from") from: String): String
+    }
+
+    override suspend fun execute(context: Context, input: Bundle): PluginResult {
+        val endpoint = input.getString("endpoint") ?: "https://postman-echo.com/"
+        val timeout = input.getInt("timeoutSeconds", 15).toLong()
+
+        val client = OkHttpClient.Builder()
+            .callTimeout(timeout, TimeUnit.SECONDS)
+            .build()
+        ZetaLog.info(id, TAG, "OkHttp ${okhttp3.OkHttp.VERSION} ready")
+
+        val api = Retrofit.Builder()
+            .baseUrl(endpoint)
+            .client(client)
+            .addConverterFactory(ScalarsConverterFactory.create())
+            .build()
+            .create(Api::class.java)
+
+        return try {
+            val started = System.currentTimeMillis()
+            val body = api.echo(from = context.packageName)
+            val ms = System.currentTimeMillis() - started
+            ZetaLog.info(id, TAG, "HTTP 200 in $ms ms, ${body.length} bytes")
+
+            PluginResult.Success(
+                message = "Called $endpoint in $ms ms",
+                data = mapOf("bytes" to body.length.toString(), "endpoint" to endpoint),
+            )
+        } catch (e: Exception) {
+            // Returning a failure, rather than throwing, lets you say something
+            // the user can act on.
+            PluginResult.Failure(
+                message = "Could not reach $endpoint: ${e.message}",
+                errorCode = "NETWORK_ERROR",
+            )
+        }
+    }
+
+    private companion object {
+        const val TAG = "{{CLASS}}"
+    }
+}

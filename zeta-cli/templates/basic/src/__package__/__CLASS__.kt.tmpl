@@ -1,0 +1,55 @@
+package {{PACKAGE}}
+
+import android.content.Context
+import android.os.Bundle
+import com.zetaforge.sdk.PluginResult
+import com.zetaforge.sdk.ZetaLog
+import com.zetaforge.sdk.ZetaPlugin
+
+/**
+ * {{DISPLAY_NAME}}.
+ *
+ * A plugin is an ordinary Kotlin class. It is compiled on its own and the Host
+ * has never seen it: at run time the Host loads this DEX, finds this class by
+ * name, creates it and calls [execute].
+ */
+class {{CLASS}} : ZetaPlugin {
+
+    // These three must match what zetaplugin.toml declares.
+    override val id = "{{PLUGIN_ID}}"
+    override val name = "{{DISPLAY_NAME}}"
+    override val version = "1.0.0"
+
+    /**
+     * Called every time the user presses START.
+     *
+     * Runs on a background thread, so blocking here is fine. Anything thrown is
+     * caught by the runtime and turned into a failure the user can read: a
+     * broken plugin cannot take the app down with it.
+     *
+     * @param context the Host's own Context — the whole Android framework
+     * @param input the settings from the form, keyed as declared in the TOML
+     */
+    override suspend fun execute(context: Context, input: Bundle): PluginResult {
+        val greeting = input.getString("greeting") ?: "Hello"
+        val shout = input.getBoolean("shout", false)
+
+        // Shows up in the app's log console and in `zeta logs`.
+        ZetaLog.info(id, TAG, "Running inside ${context.packageName}")
+
+        val message = if (shout) "${greeting.uppercase()}!" else greeting
+
+        return PluginResult.Success(
+            message = message,
+            data = mapOf(
+                "host" to context.packageName,
+                "androidSdk" to android.os.Build.VERSION.SDK_INT.toString(),
+                "device" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+            ),
+        )
+    }
+
+    private companion object {
+        const val TAG = "{{CLASS}}"
+    }
+}

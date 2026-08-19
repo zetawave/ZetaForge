@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------------------
+# {{DISPLAY_NAME}} — a plugin that talks to the network.
+#
+# The interesting part is [dependencies]: Retrofit and OkHttp are compiled into
+# this plugin's own DEX. The Host does not contain them and never will —
+# `zeta inspect` will show them inside the package.
+# ---------------------------------------------------------------------------
+
+[plugin]
+id          = "{{PLUGIN_ID}}"
+name        = "{{DISPLAY_NAME}}"
+version     = "1.0.0"
+author      = "{{AUTHOR}}"
+description = "Fetches a value over HTTP using libraries the Host does not have."
+entryPoint  = "{{PACKAGE}}.{{CLASS}}"
+
+minHostApi = {{HOST_API}}
+maxHostApi = {{HOST_API}}
+
+[[permission]]
+name   = "android.permission.INTERNET"
+reason = "Fetches the data you asked for"
+
+[[setting]]
+key         = "endpoint"
+type        = "text"
+label       = "Endpoint"
+description = "The URL to call."
+default     = "https://postman-echo.com/"
+
+[[setting]]
+key      = "timeoutSeconds"
+type     = "number"
+label    = "Timeout"
+unit     = "s"
+min      = 1
+max      = 120
+default  = 15
+
+[dependencies]
+retrofit = "com.squareup.retrofit2:retrofit:2.11.0"
+scalars  = "com.squareup.retrofit2:converter-scalars:2.11.0"
+okhttp   = "com.squareup.okhttp3:okhttp:4.12.0"

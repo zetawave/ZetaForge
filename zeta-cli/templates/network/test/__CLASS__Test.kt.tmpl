@@ -1,0 +1,27 @@
+package {{PACKAGE}}
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+/**
+ * Tests that need no device and no network.
+ *
+ * The HTTP call itself belongs in an integration test on a device; what is
+ * worth testing here is everything around it.
+ */
+class {{CLASS}}Test {
+
+    @Test
+    fun `identity matches the manifest`() {
+        val plugin = {{CLASS}}()
+        assertEquals("{{PLUGIN_ID}}", plugin.id)
+    }
+
+    @Test
+    fun `endpoints are normalised to end with a slash`() {
+        assertEquals("https://example.com/", normalise("https://example.com"))
+        assertEquals("https://example.com/", normalise("https://example.com/"))
+    }
+}
+
+private fun normalise(url: String) = if (url.endsWith("/")) url else "$url/"

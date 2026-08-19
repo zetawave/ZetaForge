@@ -1,0 +1,3 @@
+{
+  "description": "Calls an HTTP API with Retrofit and OkHttp, bundled into the plugin."
+}

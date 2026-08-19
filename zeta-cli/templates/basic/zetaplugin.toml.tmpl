@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------
+# {{DISPLAY_NAME}}
+#
+# This file is the whole configuration of the plugin: who it is, what it needs
+# from the user, and what the user can configure. There is no build file to
+# maintain — `zeta build` generates one from this.
+#
+# Reference: https://github.com/zetaforge/zetaforge/blob/main/zeta-cli/docs/plugin-anatomy.md
+# ---------------------------------------------------------------------------
+
+[plugin]
+id          = "{{PLUGIN_ID}}"
+name        = "{{DISPLAY_NAME}}"
+version     = "1.0.0"
+author      = "{{AUTHOR}}"
+description = "Says hello, and shows how much the Host lends a plugin."
+entryPoint  = "{{PACKAGE}}.{{CLASS}}"
+
+# The contract you require, and the one you have tested against. An older Host
+# refuses the plugin; a newer one only warns. See docs/versioning.md
+minHostApi = {{HOST_API}}
+maxHostApi = {{HOST_API}}
+
+# ---------------------------------------------------------------------------
+# Settings: the Host renders a form from these, and the values arrive in the
+# `input` Bundle of execute(). No UI code, and adding one needs no app update.
+# See docs/settings.md
+# ---------------------------------------------------------------------------
+
+[[setting]]
+key         = "greeting"
+type        = "text"
+label       = "Greeting"
+description = "What the plugin says when it runs."
+default     = "Hello"
+
+[[setting]]
+key      = "shout"
+type     = "switch"
+label    = "Shout it"
+default  = false
+
+# ---------------------------------------------------------------------------
+# Permissions the plugin needs. Each reason is shown to the user, so write it
+# for them. See docs/permissions.md
+#
+# [[permission]]
+# name   = "android.permission.INTERNET"
+# reason = "Downloads the forecast"
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Libraries compiled into the plugin's own DEX. The Host does not have them and
+# does not need them. See docs/dependencies.md
+#
+# [dependencies]
+# retrofit = "com.squareup.retrofit2:retrofit:2.11.0"
+# ---------------------------------------------------------------------------

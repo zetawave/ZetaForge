@@ -1,0 +1,27 @@
+# {{DISPLAY_NAME}}
+
+A ZetaForge plugin.
+
+```bash
+zeta dev        # build, install and run on every save
+zeta build      # produce dist/{{NAME}}-1.0.0.zeta
+zeta test       # unit tests, no device needed
+zeta inspect dist/{{NAME}}-1.0.0.zeta
+```
+
+## Layout
+
+| | |
+|---|---|
+| `zetaplugin.toml` | identity, permissions, settings, dependencies |
+| `src/` | the Kotlin code |
+| `test/` | JVM tests |
+| `dist/` | the packaged `.zeta` |
+
+Everything else — build files, the Gradle wrapper, dependency wiring — is
+generated into `.zeta/` and can be deleted at any time.
+
+## Distributing it
+
+The `.zeta` in `dist/` is the whole plugin. Send it to anyone with ZetaForge
+installed and they can import it — no store, no account, no signing.

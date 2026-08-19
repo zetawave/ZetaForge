@@ -1,0 +1,86 @@
+name: Release
+
+# Publishing is triggered by pushing a tag, which is what `npm run release`
+# does at the end. Everything before the tag — version bump, build, tests — has
+# already happened locally, so this workflow only has to produce the artifacts
+# and publish them.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Read the version from the tag
+        id: version
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: The tag and the package must agree
+        run: |
+          PKG=$(node -p "require('./zeta-cli/package.json').version")
+          if [ "$PKG" != "${{ steps.version.outputs.value }}" ]; then
+            echo "Tag ${{ steps.version.outputs.value }} does not match package version $PKG"
+            exit 1
+          fi
+
+      - name: Build the contract and the Host
+        run: node scripts/gradle.mjs :plugin-api:apiJar :host:assembleDebug
+
+      - name: Stage the CLI assets
+        run: node scripts/sync-assets.mjs
+
+      - name: Test
+        run: |
+          npm ci --prefix zeta-cli
+          npm test --prefix zeta-cli
+          node scripts/gradle.mjs :runtime:test
+
+      - name: Name the APK after the release
+        run: |
+          mkdir -p release
+          cp app/host/build/outputs/apk/debug/host-debug.apk \
+             release/zetaforge-host-${{ steps.version.outputs.value }}.apk
+          cp zeta-cli/assets/zetaforge-api-*.jar release/
+          (cd release && sha256sum * > SHA256SUMS.txt)
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+        working-directory: zeta-cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          body: |
+            Install the CLI:
+
+            ```bash
+            npm install -g zetaforge@${{ steps.version.outputs.value }}
+            zeta doctor
+            zeta new my-plugin
+            ```
+
+            `zetaforge-host-${{ steps.version.outputs.value }}.apk` is the ZetaForge app.
+            `zeta host install` downloads it for you — you only need this file to
+            install it by hand.
