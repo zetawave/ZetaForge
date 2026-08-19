@@ -16,6 +16,7 @@ import com.zetaforge.runtime.permission.PermissionDecision
 import com.zetaforge.runtime.permission.PermissionGateway
 import com.zetaforge.runtime.permission.PermissionInspector
 import com.zetaforge.runtime.permission.PermissionPlan
+import com.zetaforge.runtime.settings.PluginSettingsStore
 import com.zetaforge.runtime.task.ZetaTaskCenter
 import com.zetaforge.runtime.verify.BasicPluginVerifier
 import com.zetaforge.runtime.verify.PluginVerifier
@@ -23,7 +24,9 @@ import com.zetaforge.sdk.PluginResult
 import com.zetaforge.sdk.PluginState
 import com.zetaforge.sdk.ZetaLog
 import com.zetaforge.sdk.ZetaPlugin
+import com.zetaforge.sdk.ZetaActionResult
 import com.zetaforge.sdk.ZetaSdk
+import com.zetaforge.sdk.ZetaSettingsSpec
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +35,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.InputStream
 
 /**
@@ -88,6 +92,9 @@ class ZetaPluginRuntime(
 
     private val hostPermissions: Set<String> get() = inspector.declaredByHost
 
+    /** Saved parameter values, one file per plugin. */
+    val settings = PluginSettingsStore(storage)
+
     private val installer = PluginInstaller(
         storage = storage,
         verifierFactory = { pkg -> defaultVerifier(pkg.sha256) },
@@ -107,6 +114,49 @@ class ZetaPluginRuntime(
     fun setPermissionGateway(gateway: PermissionGateway) {
         permissions.gateway = gateway
     }
+
+    /**
+     * The fields to show for a plugin: those declared in its manifest, refined
+     * by the plugin itself when it implements `settings()`.
+     *
+     * The manifest half never needs the plugin's code, so a broken plugin still
+     * shows a usable form; the run-time half is given a short leash, because a
+     * plugin that hangs here would freeze a dialog.
+     */
+    suspend fun settingsSpec(pluginId: String): ZetaSettingsSpec = withContext(dispatcher) {
+        val entry = _plugins.value.firstOrNull { it.id == pluginId }
+            ?: return@withContext ZetaSettingsSpec()
+        val declared = entry.installed.manifest.settings
+
+        val dynamic = runCatching {
+            val plugin = load(entry)
+            val current = settings.toBundle(declared, settings.effectiveValues(pluginId, declared))
+            withTimeoutOrNull(SETTINGS_TIMEOUT_MS) { plugin.instance.settings(appContext, current) }
+        }.onFailure {
+            logger.warn(SOURCE, pluginId, "settings() failed, using the declared fields: ${it.message}")
+        }.getOrNull()
+
+        if (dynamic == null) declared else declared.mergedWith(dynamic)
+    }
+
+    /** Runs one of the plugin's settings actions and returns what to show. */
+    suspend fun runSettingsAction(pluginId: String, actionKey: String): ZetaActionResult =
+        withContext(dispatcher) {
+            val entry = _plugins.value.firstOrNull { it.id == pluginId }
+                ?: return@withContext ZetaActionResult.failed("Plugin not installed")
+            logger.info(SOURCE, pluginId, "Action '$actionKey'")
+            try {
+                val plugin = load(entry)
+                val spec = entry.installed.manifest.settings
+                val current = settings.toBundle(spec, settings.effectiveValues(pluginId, spec))
+                withTimeoutOrNull(ACTION_TIMEOUT_MS) {
+                    plugin.instance.runAction(appContext, actionKey, current)
+                } ?: ZetaActionResult.failed("Timed out")
+            } catch (t: Throwable) {
+                logger.warn(SOURCE, pluginId, "Action '$actionKey' failed: ${t.message}")
+                ZetaActionResult.failed(t.message ?: t.javaClass.simpleName)
+            }
+        }
 
     /** Re-evaluates the permissions of an installed plugin without running it. */
     fun inspectPermissions(pluginId: String): PermissionPlan? =
@@ -172,6 +222,13 @@ class ZetaPluginRuntime(
                     errorCode = "NOT_INSTALLED",
                 )
 
+            // Saved settings are the baseline; anything passed explicitly (tests,
+            // the developer loop) wins over them.
+            val spec = entry.installed.manifest.settings
+            val effective = settings.toBundle(spec, settings.effectiveValues(pluginId, spec)).apply {
+                putAll(input)
+            }
+
             val started = System.currentTimeMillis()
             val plugin = try {
                 load(entry)
@@ -230,7 +287,7 @@ class ZetaPluginRuntime(
 
             val runStarted = System.currentTimeMillis()
             val result = try {
-                plugin.instance.execute(appContext, input)
+                plugin.instance.execute(appContext, effective)
             } catch (t: Throwable) {
                 // Includes RuntimeException thrown deliberately by a plugin.
                 val duration = System.currentTimeMillis() - runStarted
@@ -395,5 +452,7 @@ class ZetaPluginRuntime(
 
     private companion object {
         const val SOURCE = "Runtime"
+        const val SETTINGS_TIMEOUT_MS = 5_000L
+        const val ACTION_TIMEOUT_MS = 30_000L
     }
 }

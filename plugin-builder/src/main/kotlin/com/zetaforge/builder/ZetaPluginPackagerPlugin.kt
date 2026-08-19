@@ -55,6 +55,7 @@ class ZetaPluginPackagerPlugin : Plugin<Project> {
                     sourceRoot.set(spec.sourceRoot)
                     sourceFiles.from(spec.sourceFiles)
                     capabilities.set(spec.capabilities)
+                    settings.set(spec.settings)
                     manifestFormatVersion.convention(2)
                     minSdk.convention(26)
                     bundledDependencies.convention(emptyList())

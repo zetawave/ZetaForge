@@ -55,4 +55,31 @@ interface ZetaPlugin {
      * implementation does nothing.
      */
     suspend fun onUnload() {}
+
+    /**
+     * Optional: fields to show in the settings dialog, computed on the device.
+     *
+     * The package manifest already declares the plugin's parameters, which is
+     * what the Host uses when this returns `null` - so implementing it is only
+     * worth it for what a build-time declaration cannot know: the encoders this
+     * chip actually has, the folders that exist, options that depend on another
+     * value, or an [ZetaSetting.Action] button.
+     *
+     * Whatever is returned is merged **over** the manifest fields, matched by
+     * key. Called off the main thread, with errors contained and a time limit,
+     * exactly like [execute].
+     *
+     * @param current the values saved so far, so dependent fields can react.
+     */
+    suspend fun settings(context: Context, current: Bundle): ZetaSettingsSpec? = null
+
+    /**
+     * Optional: runs a [ZetaSetting.Action] the user pressed in the settings
+     * dialog, and returns what to show them.
+     *
+     * Keep it short - this runs while a dialog waits. "Test the connection",
+     * "estimate the result", not "do the actual work".
+     */
+    suspend fun runAction(context: Context, actionKey: String, current: Bundle): ZetaActionResult =
+        ZetaActionResult.failed("This plugin has no action '" + actionKey + "'")
 }

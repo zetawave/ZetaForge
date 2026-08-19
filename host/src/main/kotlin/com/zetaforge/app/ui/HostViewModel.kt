@@ -17,7 +17,10 @@ import com.zetaforge.runtime.permission.PermissionPlan
 import com.zetaforge.runtime.permission.SpecialAccess
 import com.zetaforge.runtime.pkg.PluginSourceFile
 import com.zetaforge.runtime.pkg.PluginSourceReader
+import com.zetaforge.runtime.settings.PluginSettingsStore
 import com.zetaforge.runtime.task.ZetaTaskCenter
+import com.zetaforge.sdk.ZetaActionResult
+import com.zetaforge.sdk.ZetaSettingsSpec
 import com.zetaforge.sdk.PluginResult
 import com.zetaforge.sdk.ZetaLogLevel
 import kotlinx.coroutines.CompletableDeferred
@@ -48,6 +51,7 @@ data class HostUiState(
     val permissionPrompt: PermissionPrompt? = null,
     val specialAccessPrompt: SpecialAccessPrompt? = null,
     val blockedDialog: BlockedDialog? = null,
+    val settingsDialog: SettingsState? = null,
 ) {
     val filteredLogs: List<ZetaLogRecord>
         get() = logs.filter { it.level.ordinal >= minLevel.ordinal }
@@ -94,6 +98,20 @@ data class HostUiState(
 
     /** Explanation shown before jumping to a Settings screen. */
     data class SpecialAccessPrompt(val access: SpecialAccess, val reason: String)
+
+    /**
+     * The settings form of one plugin: the schema it ships, the values as they
+     * are being edited, and the result of the last action button.
+     */
+    data class SettingsState(
+        val pluginId: String,
+        val pluginName: String,
+        val spec: ZetaSettingsSpec,
+        val values: Map<String, Any> = emptyMap(),
+        val runningAction: String? = null,
+        val actionResult: ZetaActionResult? = null,
+        val loading: Boolean = false,
+    )
 
     /** Terminal state: nothing can be asked, only Settings (or a new build) helps. */
     data class BlockedDialog(
@@ -349,6 +367,84 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
 
     fun unload(pluginId: String) {
         viewModelScope.launch { runtime.unload(pluginId) }
+    }
+
+    // -- settings ------------------------------------------------------------
+
+    /**
+     * Opens the settings form. The schema comes from the plugin's manifest and,
+     * when the plugin implements it, from its own `settings()` hook - so the
+     * dialog can offer choices that only exist on this device.
+     */
+    fun openSettings(entry: PluginEntry) {
+        ui.value = ui.value.copy(
+            settingsDialog = HostUiState.SettingsState(
+                pluginId = entry.id,
+                pluginName = entry.installed.displayName,
+                spec = entry.installed.manifest.settings,
+                values = runtime.settings.effectiveValues(entry.id, entry.installed.manifest.settings),
+                loading = true,
+            )
+        )
+        viewModelScope.launch {
+            val spec = runtime.settingsSpec(entry.id)
+            val current = ui.value.settingsDialog ?: return@launch
+            if (current.pluginId != entry.id) return@launch
+            ui.value = ui.value.copy(
+                settingsDialog = current.copy(
+                    spec = spec,
+                    values = runtime.settings.effectiveValues(entry.id, spec) + current.values,
+                    loading = false,
+                )
+            )
+        }
+    }
+
+    fun updateSetting(key: String, value: Any) {
+        val current = ui.value.settingsDialog ?: return
+        ui.value = ui.value.copy(settingsDialog = current.copy(values = current.values + (key to value)))
+    }
+
+    fun saveSettings() {
+        val current = ui.value.settingsDialog ?: return
+        runtime.settings.save(current.pluginId, current.values)
+        runtime.logger.info("Runtime", current.pluginId, "Settings saved: " + current.values.keys.joinToString())
+        ui.value = ui.value.copy(settingsDialog = null)
+    }
+
+    fun resetSettings() {
+        val current = ui.value.settingsDialog ?: return
+        runtime.settings.clear(current.pluginId)
+        ui.value = ui.value.copy(
+            settingsDialog = current.copy(
+                values = runtime.settings.effectiveValues(current.pluginId, current.spec),
+                actionResult = null,
+            )
+        )
+    }
+
+    fun closeSettings() {
+        ui.value = ui.value.copy(settingsDialog = null)
+    }
+
+    /** Runs a settings action button and shows whatever the plugin answers. */
+    fun runSettingsAction(actionKey: String) {
+        val current = ui.value.settingsDialog ?: return
+        ui.value = ui.value.copy(settingsDialog = current.copy(runningAction = actionKey, actionResult = null))
+        viewModelScope.launch {
+            // The values being edited are saved first: an action like "test the
+            // connection" must see what is on screen, not what was saved before.
+            runtime.settings.save(current.pluginId, current.values)
+            val result = runtime.runSettingsAction(current.pluginId, actionKey)
+            val open = ui.value.settingsDialog ?: return@launch
+            ui.value = ui.value.copy(
+                settingsDialog = open.copy(
+                    runningAction = null,
+                    actionResult = result,
+                    values = open.values + result.updatedValues,
+                )
+            )
+        }
     }
 
     fun setQuery(query: String) {

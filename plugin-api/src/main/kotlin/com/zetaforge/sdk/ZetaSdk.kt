@@ -20,12 +20,15 @@ object ZetaSdk {
      * 1 - initial contract: ZetaPlugin, PluginResult, ZetaLog.
      * 2 - adds ZetaProgress, and the Host keeps a foreground service alive for
      *     the whole execution, so a plugin survives the screen going off.
+     * 3 - adds settings: parameters declared in the manifest and edited in the
+     *     Host, optionally refined at run time by ZetaPlugin.settings(), with
+     *     ZetaSetting.Action buttons served by ZetaPlugin.runAction().
      *
      * Additions are backwards compatible: a plugin built against API 1 runs
      * unchanged on a Host implementing API 2 (see `maxHostApi` handling in the
      * runtime, which warns instead of refusing).
      */
-    const val HOST_API_VERSION: Int = 2
+    const val HOST_API_VERSION: Int = 3
 
     /** Lowest Host API version this SDK still knows how to talk to. */
     const val MIN_SUPPORTED_PLUGIN_API: Int = 1
@@ -36,6 +39,7 @@ object ZetaSdk {
      * 1 - initial format.
      * 2 - structured permissions (reason/optional/sdk range), special access and
      *     bundled source files. Version 1 packages keep working.
+     * 3 - declared settings (`settings` array), rendered by the Host.
      */
-    const val MANIFEST_FORMAT_VERSION: Int = 2
+    const val MANIFEST_FORMAT_VERSION: Int = 3
 }

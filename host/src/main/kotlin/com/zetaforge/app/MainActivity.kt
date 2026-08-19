@@ -46,6 +46,28 @@ class MainActivity : ComponentActivity() {
 
     private var notificationPermissionAsked = false
 
+    /** Key of the folder setting waiting for the picker to come back. */
+    private var pendingFolderSetting: String? = null
+
+    /**
+     * Folder picker for `ZetaSetting.Folder`. The permission is taken
+     * persistably, otherwise the plugin would lose access to the folder the
+     * moment the phone reboots.
+     */
+    private val folderPicker =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            val key = pendingFolderSetting ?: return@registerForActivityResult
+            pendingFolderSetting = null
+            if (uri == null) return@registerForActivityResult
+            runCatching {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
+            }
+            viewModel.updateSetting(key, uri.toString())
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -87,6 +109,16 @@ class MainActivity : ComponentActivity() {
                         onToggleLogs = viewModel::toggleLogsExpanded,
                         onQueryChange = viewModel::setQuery,
                         onToggleCard = { viewModel.togglePluginExpanded(it.id) },
+                        onSettings = viewModel::openSettings,
+                        onSettingChange = viewModel::updateSetting,
+                        onSettingsAction = viewModel::runSettingsAction,
+                        onPickFolder = { key ->
+                            pendingFolderSetting = key
+                            folderPicker.launch(null)
+                        },
+                        onSaveSettings = viewModel::saveSettings,
+                        onResetSettings = viewModel::resetSettings,
+                        onCloseSettings = viewModel::closeSettings,
                         onDismissBanner = viewModel::dismissBanner,
                         onPermissionPromptResult = viewModel::onPermissionPromptResult,
                         onSpecialAccessResult = viewModel::onSpecialAccessResult,

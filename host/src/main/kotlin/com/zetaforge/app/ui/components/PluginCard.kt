@@ -15,11 +15,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,6 +62,7 @@ fun PluginCard(
     onStart: () -> Unit,
     onDetails: () -> Unit,
     onViewCode: () -> Unit,
+    onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val accents = zetaAccents()
@@ -83,17 +84,9 @@ fun PluginCard(
                     .clickable(onClick = onToggleExpanded),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    contentColor = MaterialTheme.colorScheme.primary,
-                ) {
-                    Icon(
-                        Icons.Filled.Bolt,
-                        contentDescription = null,
-                        modifier = Modifier.padding(9.dp).size(20.dp),
-                    )
-                }
+                // The product's own mark rather than a generic icon: this is a
+                // ZetaForge plugin, and the card should say so at a glance.
+                ZetaLogo(size = 38.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -214,24 +207,35 @@ fun PluginCard(
             }
 
             AnimatedVisibility(visible = expanded) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedButton(
-                        onClick = onViewCode,
-                        modifier = Modifier.weight(1f),
+                        onClick = onSettings,
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                     ) {
-                        Icon(Icons.Outlined.Code, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.action_view_code).uppercase(), maxLines = 1)
+                        Text(stringResource(R.string.action_settings).uppercase(), maxLines = 1)
                     }
-                    OutlinedButton(
-                        onClick = onDetails,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.action_details).uppercase(), maxLines = 1)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = onViewCode,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(Icons.Outlined.Code, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.action_view_code).uppercase(), maxLines = 1)
+                        }
+                        OutlinedButton(
+                            onClick = onDetails,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.action_details).uppercase(), maxLines = 1)
+                        }
                     }
                 }
             }

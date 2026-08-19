@@ -3,7 +3,9 @@ package com.zetaforge.runtime.manifest
 import com.zetaforge.runtime.permission.PermissionRequirement
 import com.zetaforge.runtime.permission.SpecialAccess
 import com.zetaforge.runtime.permission.SpecialAccessRequirement
+import com.zetaforge.runtime.settings.SettingsParser
 import com.zetaforge.sdk.ZetaSdk
+import com.zetaforge.sdk.ZetaSettingsSpec
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -38,6 +40,7 @@ data class SourceEntry(
  * * **1** - initial: permissions were plain strings.
  * * **2** - permissions may be objects (`reason`, `optional`, `minSdk`, `maxSdk`),
  *   plus `specialAccess` and `source`. Version 1 packages still parse.
+ * * **3** - `settings`: the parameters the Host shows in its settings dialog.
  */
 data class ZetaManifest(
     val formatVersion: Int,
@@ -59,6 +62,8 @@ data class ZetaManifest(
     val hostProvidedDependencies: List<String>,
     val dex: List<DexEntry>,
     val source: List<SourceEntry>,
+    /** Parameters the Host renders in the settings dialog. */
+    val settings: ZetaSettingsSpec,
     /** `null` while packages are unsigned; reserved for SignaturePluginVerifier. */
     val signature: PluginSignature?,
 ) {
@@ -167,6 +172,7 @@ data class ZetaManifest(
                 bundledDependencies = dependencies?.optJSONArray("bundled").toStringList(),
                 hostProvidedDependencies = dependencies?.optJSONArray("hostProvided").toStringList(),
                 dex = dex,
+                settings = SettingsParser.parse(root.optJSONArray("settings")),
                 source = root.optJSONObject("code")?.optJSONArray("source")?.mapObjects { obj ->
                     SourceEntry(
                         path = obj.requireString("path"),

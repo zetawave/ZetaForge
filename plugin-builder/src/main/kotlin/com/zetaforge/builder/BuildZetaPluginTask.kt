@@ -77,6 +77,7 @@ abstract class BuildZetaPluginTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val sourceFiles: ConfigurableFileCollection
     @get:Input abstract val capabilities: ListProperty<String>
+    @get:Input abstract val settings: ListProperty<SettingDeclaration>
     @get:Input abstract val manifestFormatVersion: Property<Int>
     @get:Input abstract val minSdk: Property<Int>
 
@@ -171,6 +172,7 @@ abstract class BuildZetaPluginTask : DefaultTask() {
         add("permissions", buildPermissions())
         add("specialAccess", buildSpecialAccess())
         add("capabilities", capabilities.get().toJsonArray())
+        add("settings", buildSettings())
         add("dependencies", JsonObject().apply {
             add("bundled", bundledDependencies.get().toJsonArray())
             add("hostProvided", hostProvidedDependencies.get().toJsonArray())
@@ -226,6 +228,57 @@ abstract class BuildZetaPluginTask : DefaultTask() {
                     if (permission.maxSdk != Int.MAX_VALUE) addProperty("maxSdk", permission.maxSdk)
                 })
             }
+        }
+    }
+
+    /** The schema the Host renders; see SettingsParser on the runtime side. */
+    private fun buildSettings(): JsonArray = JsonArray().apply {
+        settings.get().forEach { setting ->
+            add(JsonObject().apply {
+                addProperty("type", setting.type)
+                addProperty("key", setting.key)
+                addProperty("label", setting.label)
+                if (setting.description.isNotBlank()) addProperty("description", setting.description)
+                if (setting.group.isNotBlank()) addProperty("group", setting.group)
+                if (setting.advanced) addProperty("advanced", true)
+                if (setting.unit.isNotBlank()) addProperty("unit", setting.unit)
+                if (setting.hint.isNotBlank()) addProperty("hint", setting.hint)
+                if (setting.secret) addProperty("secret", true)
+                if (setting.runningLabel.isNotBlank()) addProperty("runningLabel", setting.runningLabel)
+                setting.min?.let { addProperty("min", it) }
+                setting.max?.let { addProperty("max", it) }
+                setting.step?.let { addProperty("step", it) }
+
+                when (setting.type) {
+                    "switch" -> addProperty("default", setting.defaultValue.toBoolean())
+                    "number" -> addProperty("default", setting.defaultValue?.toLongOrNull() ?: 0L)
+                    "decimal" -> addProperty("default", setting.defaultValue?.toDoubleOrNull() ?: 0.0)
+                    "multichoice" -> add(
+                        "default",
+                        JsonArray().apply {
+                            setting.defaultValue.orEmpty()
+                                .split(',')
+                                .map { it.trim() }
+                                .filter { it.isNotEmpty() }
+                                .forEach { add(it) }
+                        },
+                    )
+
+                    "action" -> Unit
+                    else -> setting.defaultValue?.let { addProperty("default", it) }
+                }
+
+                if (setting.options.isNotEmpty()) {
+                    add("options", JsonArray().apply {
+                        setting.options.forEachIndexed { index, value ->
+                            add(JsonObject().apply {
+                                addProperty("value", value)
+                                addProperty("label", setting.optionLabels.getOrElse(index) { value })
+                            })
+                        }
+                    })
+                }
+            })
         }
     }
 
@@ -288,6 +341,7 @@ abstract class BuildZetaPluginTask : DefaultTask() {
                 "\n  entryPoint       : " + entryPoint.get() + " (found in " + entryHolder.name + ")" +
                 "\n  dex files        : " + dexSummary +
                 "\n  permissions      : " + permissionSummary() +
+                "\n  settings         : " + settings.get().joinToString { it.key }.ifEmpty { "none" } +
                 "\n  special access   : " + specialAccess.get().joinToString { it.id }.ifEmpty { "none" } +
                 "\n  source files     : " + sourceFiles.files.count { it.isFile } +
                 "\n  retrofit2 in dex : " + hasRetrofit +

@@ -54,6 +54,7 @@ import com.zetaforge.app.ui.components.PermissionBlockedDialog
 import com.zetaforge.app.ui.components.PermissionRequestDialog
 import com.zetaforge.app.ui.components.PluginCard
 import com.zetaforge.app.ui.components.PluginDetailsSheet
+import com.zetaforge.app.ui.components.PluginSettingsDialog
 import com.zetaforge.app.ui.components.SectionHeader
 import com.zetaforge.app.ui.components.SpecialAccessDialog
 import com.zetaforge.app.ui.components.ZetaLogo
@@ -67,6 +68,13 @@ data class HostActions(
     val onStart: (PluginEntry) -> Unit,
     val onDetails: (PluginEntry) -> Unit,
     val onViewCode: (PluginEntry) -> Unit,
+    val onSettings: (PluginEntry) -> Unit,
+    val onSettingChange: (String, Any) -> Unit,
+    val onSettingsAction: (String) -> Unit,
+    val onPickFolder: (String) -> Unit,
+    val onSaveSettings: () -> Unit,
+    val onResetSettings: () -> Unit,
+    val onCloseSettings: () -> Unit,
     val onCloseDetails: () -> Unit,
     val onCloseCode: () -> Unit,
     val onRunFailing: (PluginEntry) -> Unit,
@@ -180,6 +188,18 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
         )
     }
 
+    state.settingsDialog?.let { settings ->
+        PluginSettingsDialog(
+            state = settings,
+            onValueChange = actions.onSettingChange,
+            onPickFolder = actions.onPickFolder,
+            onAction = actions.onSettingsAction,
+            onSave = actions.onSaveSettings,
+            onReset = actions.onResetSettings,
+            onDismiss = actions.onCloseSettings,
+        )
+    }
+
     state.codeViewer?.let { viewer ->
         CodeViewerDialog(
             pluginName = viewer.pluginName,
@@ -262,6 +282,7 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
                     onStart = { actions.onStart(entry) },
                     onDetails = { actions.onDetails(entry) },
                     onViewCode = { actions.onViewCode(entry) },
+                    onSettings = { actions.onSettings(entry) },
                 )
             }
         }

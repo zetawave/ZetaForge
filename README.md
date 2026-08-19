@@ -35,7 +35,7 @@ own DEX. A Gradle task verifies that on the built APK.
 9. [How plugin dependencies work](#9-how-plugin-dependencies-work)
 9b. [Permissions](#9b-permissions)
 10. [Proving Retrofit is not in the Host](#10-proving-retrofit-is-not-in-the-host)
-11. [Writing your own plugin](#11-writing-your-own-plugin)
+11. [Writing a plugin](#11-writing-a-plugin)
 12. [Tests](#12-tests)
 13. [Developer scripts](#13-developer-scripts)
 14. [Dynamic Plugin Limitations](#14-dynamic-plugin-limitations)
@@ -434,43 +434,311 @@ any of those markers ever appears in the Host DEX.
 The instrumented test asserts the same thing from the other side: the Host class
 loader cannot load `retrofit2.Retrofit`, while the plugin runs it happily.
 
-## 11. Writing your own plugin
+## 11. Writing a plugin
 
-1. Create `plugins/<your-plugin>/` with a `com.android.application` module that
-   also applies `com.zetaforge.zeta-plugin`.
-2. Declare `compileOnly(project(":plugin-api"))`, `compileOnly(libs.kotlin.stdlib)`,
-   `compileOnly(libs.kotlinx.coroutines.core)` and whatever `implementation`
-   dependencies you need.
-3. Implement the contract:
+A plugin is an ordinary Kotlin module. It is compiled on its own, ships as a
+single `.zeta`, and the Host runs it without ever having been compiled against
+it. This section is the complete reference for writing one.
+
+### 11.1 Anatomy of a plugin
+
+```
+plugins/my-plugin/                 (or plugins-local/ for private ones)
+├── build.gradle.kts               identity, permissions, settings, dependencies
+├── src/main/AndroidManifest.xml   near-empty; the APK is never installed
+└── src/main/kotlin/…/MyPlugin.kt  the entry point
+```
+
+Add it to `settings.gradle.kts` — anything under `plugins-local/` is picked up
+automatically and is git-ignored, which is where private plugins belong.
+
+### 11.2 The contract
 
 ```kotlin
 class MyPlugin : ZetaPlugin {
-    override val id = "com.example.myplugin"
+    override val id = "com.example.myplugin"       // must match pluginId
     override val name = "My Plugin"
-    override val version = "0.1.0"
+    override val version = "1.0.0"
 
     override suspend fun execute(context: Context, input: Bundle): PluginResult {
-        // normal Kotlin, normal Android Context, normal libraries
-        val files = context.filesDir.listFiles()?.size ?: 0
-        return PluginResult.Success("Found $files files")
+        // plain Kotlin, the Host's Context, your own libraries
+        return PluginResult.Success("Done", data = mapOf("files" to "12"))
     }
 }
 ```
 
-4. Describe it:
+Rules the runtime relies on:
+
+* a **public no-argument constructor** — the entry point is created reflectively;
+* **safe to run more than once**, because it will be;
+* `execute` runs on `Dispatchers.IO`, never on the main thread;
+* every `Throwable` is caught by the runtime and turned into a `Failure`, so a
+  crash in a plugin cannot take the app down. Do not call `System.exit`.
+
+Optional lifecycle hooks: `onLoad(context)` after instantiation, `onUnload()`
+when the Host drops the plugin.
+
+Return a `PluginResult.Success` or `PluginResult.Failure`, both carrying a
+message, a duration and a free-form `data` map that the Host shows in the
+details sheet. Failures also carry an `errorCode` — use stable, greppable
+values (`NETWORK_ERROR`, `PERMISSION_DENIED`).
+
+### 11.3 Identity and metadata
 
 ```kotlin
 zetaPlugin {
-    pluginId.set("com.example.myplugin")
+    pluginId.set("com.example.myplugin")           // reverse DNS, stable forever
     displayName.set("My Plugin")
+    version.set("1.0.0")                           // bump on every release
+    author.set("ZetaForge")
+    homepage.set("https://example.com")
+    license.set("Apache-2.0")
+    description.set("One paragraph, written for a human.")
     entryPoint.set("com.example.myplugin.MyPlugin")
-    permissions.set(listOf("android.permission.INTERNET"))
+    minHostApi.set(3)                              // hard requirement
+    maxHostApi.set(3)                              // tested up to; newer only warns
+    archiveBaseName.set("my-plugin")               // build/zetaforge/my-plugin.zeta
 }
 ```
 
-5. `./gradlew :plugins:<your-plugin>:buildZetaPlugin`, then import the `.zeta`.
+`pluginId` is also the installation directory and the key of every stored
+state: changing it creates a second, unrelated plugin.
 
-Add the module to `settings.gradle.kts`. Nothing in the Host changes.
+### 11.4 Dependencies: what lands in the DEX
+
+This is the rule that makes the whole system work:
+
+```kotlin
+dependencies {
+    // Provided by the Host. NEVER bundled - one copy must exist across the boundary.
+    compileOnly(project(":plugin-api"))
+    compileOnly(libs.kotlin.stdlib)
+    compileOnly(libs.kotlinx.coroutines.core)
+
+    // Yours. These are compiled into the plugin's DEX.
+    implementation(libs.retrofit) { exclude(group = "org.jetbrains.kotlin") }
+}
+```
+
+The contract, the Kotlin stdlib and coroutines must resolve to the *same* class
+objects on both sides — otherwise the Host cannot cast your instance to
+`ZetaPlugin`, and a `suspend fun` could not even be invoked, because
+`Continuation` would differ. The runtime checks this at load time and fails with
+an explicit message rather than an opaque `ClassCastException`.
+
+Everything else is yours and travels inside the package. Exclude the Kotlin
+group from Kotlin-based libraries (OkHttp, Okio) so their stdlib copy does not
+follow them in.
+
+### 11.5 Permissions
+
+```kotlin
+permission("android.permission.READ_MEDIA_IMAGES") {
+    reason = "Reads your photos in order to copy them"   // the user reads this
+    minSdk = 33                                          // only where it applies
+}
+permission("android.permission.ACCESS_MEDIA_LOCATION") {
+    reason = "Keeps the location stored inside photos"
+    optional = true                                      // run anyway if denied
+}
+specialAccess("allFilesAccess") {
+    reason = "Needed to replace files in shared storage"
+}
+```
+
+What actually happens at START: the runtime re-checks every permission (they can
+be revoked at any time), shows your `reason` in a dialog, requests what is
+missing, and blocks execution with a structured failure if a mandatory one is
+denied. Special accesses open the right Settings screen and are re-checked on
+return.
+
+**A permission the Host APK does not declare can never be granted** — Android
+refuses it without showing anything. The Host declares a broad superset in
+`zetaforge.permissions`; if you need something outside it, add it there and
+rebuild the Host. The failure says exactly that when it happens.
+
+Available special accesses: `allFilesAccess`, `displayOverOtherApps`,
+`exactAlarms`, `usageAccess`, `notificationAccess`,
+`ignoreBatteryOptimizations`, `installPackages`, `writeSettings`.
+
+### 11.6 Settings
+
+Declare parameters and the Host builds the form. You write no UI, and the app
+needs no change when you add a parameter.
+
+```kotlin
+switchSetting("videos", true) {
+    label = "Videos"
+    description = "Re-encode videos too."
+    group = "What to compress"            // section header
+}
+numberSetting("maxFiles", 0) {
+    label = "Files per run"
+    min = 0.0; max = 5000.0; step = 25
+    unit = "files"
+    advanced = true                        // hidden under "Show advanced"
+}
+decimalSetting("bitrateFactor", 0.55) { min = 0.2; max = 1.0 }
+choiceSetting("codec", "hevc") { options("hevc", "avc") }
+multiChoiceSetting("folders") { options("DCIM", "Pictures", "Movies") }
+textSetting("token") { secret = true }     // masked; not encrypted at rest yet
+folderSetting("destination")               // system picker, permission persisted
+actionSetting("testConnection") {          // a button, see below
+    label = "Test connection"
+    runningLabel = "Looking…"
+}
+```
+
+The saved values arrive in the `input: Bundle` of `execute`, typed as declared:
+`getBoolean`, `getInt`, `getDouble`, `getString`, `getStringArray`. Values
+passed explicitly (tests, `run.sh`) win over saved ones, and unknown keys are
+preserved rather than dropped.
+
+**Run-time refinement** — optional, for what a build-time declaration cannot
+know:
+
+```kotlin
+override suspend fun settings(context: Context, current: Bundle): ZetaSettingsSpec? =
+    ZetaSettingsSpec(listOf(
+        ZetaSetting.Choice(
+            key = "codec", label = "Video codec", group = "Quality",
+            default = "hevc",
+            options = encodersAvailableOnThisDevice(),
+        )
+    ))
+```
+
+Returned fields are merged **over** the declared ones, matched by key. The call
+is time-limited and its failures are contained: if it throws, the dialog falls
+back to the manifest fields.
+
+**Actions** — a button that runs a short routine and shows the answer:
+
+```kotlin
+override suspend fun runAction(context: Context, actionKey: String, current: Bundle) =
+    when (actionKey) {
+        "testConnection" -> ZetaActionResult.ok("Connected: 192.168.0.154 → D:\\Backup")
+        else -> ZetaActionResult.failed("Unknown action")
+    }
+```
+
+Keep actions short — a dialog is waiting. "Test the connection", "estimate the
+result", not the work itself. An action can also write values back into the form
+through `updatedValues`.
+
+### 11.7 Logging and progress
+
+```kotlin
+ZetaLog.info(id, "MyPlugin", "HTTP 200 in 412 ms")
+ZetaProgress.report(id, current = copied, total = totalBytes, message = "12/340 files")
+```
+
+`ZetaLog` writes into the same stream as the runtime, visible in the app's log
+console (which expands full screen). `ZetaProgress` drives the progress bar in
+the notification.
+
+Reporting progress matters beyond cosmetics: the Host keeps a **foreground
+service** alive for the whole execution, which is what prevents Android from
+freezing the process when the screen goes off. Without it a long transfer stalls
+until the phone wakes up. On Android 15+ that service is capped at roughly six
+hours a day; when the budget ends the run is stopped cleanly and a notification
+asks the user to resume.
+
+### 11.8 Making work resumable
+
+Anything that runs for minutes should survive being interrupted:
+
+* keep progress in `context.filesDir/<your-plugin>/state.json`, written to a
+  temporary file and renamed over the old one, so a crash mid-write cannot
+  destroy it;
+* save every N items, not at the end;
+* key entries by something that changes when the item changes (path + size), so
+  a modified file is processed again and an unmodified one never is;
+* when the work is *destructive* (replacing files), write the result next to the
+  original and **rename over it**: on the same filesystem the rename is atomic,
+  so the path always holds either the intact original or the finished result.
+
+For state that must survive the app's data being cleared, keep a copy on shared
+storage — and, better still, make the result self-describing so no memory is
+needed at all (an EXIF marker, or a measurable property of the file).
+
+### 11.9 Building and installing
+
+```bash
+./gradlew :plugins:my-plugin:buildZetaPlugin
+# -> plugins/my-plugin/build/zetaforge/my-plugin.zeta
+```
+
+The task never trusts the build: it opens the produced APK, checks the DEX
+header, verifies the entry point class is really defined inside, records a
+SHA-256 per DEX, and ships your sources so the user can read them in the app.
+
+Development loop with a device attached:
+
+```bash
+./run.sh --plugin my-plugin --import   # build, install the Host, import
+./run.sh --plugin my-plugin --run      # ... and execute it
+./run.sh --plugin my-plugin --logs     # follow the log stream
+./run.sh --plugin my-plugin --plugin-only --import   # skip the Host build
+```
+
+To update a plugin **without disturbing anything else running**, skip `run.sh`
+entirely (it launches the app, and reinstalls it unless `--plugin-only` is
+given) and push the package straight into the app's cache:
+
+```bash
+adb push …/my-plugin.zeta /data/local/tmp/p.zeta
+adb shell "run-as com.zetaforge.app sh -c 'cat > /data/data/com.zetaforge.app/cache/p.zeta' < /data/local/tmp/p.zeta"
+adb shell am start -n com.zetaforge.app/.MainActivity \
+    -a com.zetaforge.app.action.IMPORT_FILE --es path /data/data/com.zetaforge.app/cache/p.zeta
+```
+
+Never replace a plugin while that same plugin is running.
+
+### 11.10 Versioning
+
+Two numbers, with different meanings:
+
+| | Meaning | Today |
+|---|---|---|
+| `HOST_API_VERSION` | the contract the Host implements | 3 |
+| `formatVersion` | the `.zeta` layout the Host can read | 3 |
+
+A plugin declares `minHostApi` (a hard requirement — an older Host refuses it)
+and `maxHostApi` (what you tested — a newer Host only warns). A package whose
+`formatVersion` is newer than the Host is refused with an explicit message, so
+an old app never half-reads a new package.
+
+History: **API 1** the base contract; **2** adds `ZetaProgress` and the
+foreground service; **3** adds settings. **Format 1** plain strings for
+permissions; **2** structured permissions, special access, bundled sources;
+**3** declared settings.
+
+### 11.11 What a plugin can and cannot do
+
+Works: any JVM/Android library compiled into the DEX, the Host's `Context` and
+through it the whole framework, files, network, MediaStore, notifications via
+the Host, run-time permissions, long background work.
+
+Does not work, by design or by Android's rules: **resources** (no `R`, no
+layouts — ship data in `assets/`), **manifest components** (an Activity or a
+Service declared by a plugin is ignored; the Host's manifest is fixed at install
+time), **native `.so` libraries** (the package reserves `libs/` for them, nothing
+loads them yet), and **any permission the Host does not declare**.
+
+And the boundary worth repeating: a plugin runs **inside the Host process, with
+its UID and its permissions**. This is a trust boundary, not a sandbox. Importing
+a `.zeta` is as consequential as installing an app.
+
+### 11.12 Checklist before shipping
+
+* `pluginId`, `entryPoint` and the class's own `id` agree
+* `version` bumped, and the card shows what you expect
+* every permission has a `reason` written for a human
+* `compileOnly` for `plugin-api`, stdlib and coroutines; nothing else shared
+* long runs report progress and can resume
+* destructive work writes to a temporary file and renames
+* `./gradlew :plugins:my-plugin:buildZetaPlugin` prints the entry point as found
 
 ## 12. Tests
 

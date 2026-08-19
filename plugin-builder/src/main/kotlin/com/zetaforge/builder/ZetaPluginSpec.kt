@@ -39,6 +39,55 @@ data class SpecialAccessDeclaration(
     companion object { private const val serialVersionUID = 1L }
 }
 
+/**
+ * One configurable parameter, as declared in the plugin's build file and shipped
+ * in `manifest.json`. The Host turns these into a form, so the plugin never
+ * draws UI and the Host never learns what any of them mean.
+ */
+data class SettingDeclaration(
+    val type: String,
+    val key: String,
+    val label: String,
+    val description: String = "",
+    val group: String = "",
+    val advanced: Boolean = false,
+    val defaultValue: String? = null,
+    val min: Double? = null,
+    val max: Double? = null,
+    val step: Long? = null,
+    val unit: String = "",
+    val hint: String = "",
+    val secret: Boolean = false,
+    val options: List<String> = emptyList(),
+    val optionLabels: List<String> = emptyList(),
+    val runningLabel: String = "",
+) : Serializable {
+    companion object { private const val serialVersionUID = 1L }
+}
+
+/** Receiver of the `switchSetting { }`, `choiceSetting { }`, ... blocks. */
+open class SettingSpec {
+    var label: String = ""
+    var description: String = ""
+    var group: String = ""
+    var advanced: Boolean = false
+    var unit: String = ""
+    var hint: String = ""
+    var secret: Boolean = false
+    var min: Double? = null
+    var max: Double? = null
+    var step: Long? = null
+    var runningLabel: String = ""
+
+    /** Options for choice / multiChoice, as `value to label` pairs. */
+    var options: List<Pair<String, String>> = emptyList()
+
+    /** Shortcut for when value and label are the same. */
+    fun options(vararg values: String) {
+        options = values.map { it to it }
+    }
+}
+
 /** Mutable builder used by the `permission { }` / `specialAccess { }` DSL blocks. */
 open class PermissionSpec {
     var reason: String = ""
@@ -107,6 +156,9 @@ abstract class ZetaPluginSpec {
     /** Special accesses the plugin needs the user to enable in Settings. */
     abstract val specialAccess: ListProperty<SpecialAccessDeclaration>
 
+    /** Parameters the Host shows in its settings dialog. */
+    abstract val settings: ListProperty<SettingDeclaration>
+
     /** Forward-looking: named capabilities the plugin requests from the Host. */
     abstract val capabilities: ListProperty<String>
 
@@ -135,6 +187,76 @@ abstract class ZetaPluginSpec {
         declaredPermissions.convention(emptyList())
         specialAccess.convention(emptyList())
         capabilities.convention(emptyList())
+        settings.convention(emptyList())
+    }
+
+    // --- settings DSL -------------------------------------------------------
+
+    /** A yes/no switch. */
+    @JvmOverloads
+    fun switchSetting(key: String, default: Boolean = false, configure: Action<SettingSpec>? = null) =
+        addSetting("switch", key, default.toString(), configure)
+
+    /** A whole number, optionally bounded with min/max. */
+    @JvmOverloads
+    fun numberSetting(key: String, default: Long = 0, configure: Action<SettingSpec>? = null) =
+        addSetting("number", key, default.toString(), configure)
+
+    /** A decimal, for thresholds and factors. */
+    @JvmOverloads
+    fun decimalSetting(key: String, default: Double = 0.0, configure: Action<SettingSpec>? = null) =
+        addSetting("decimal", key, default.toString(), configure)
+
+    /** Free text; set `secret = true` in the block to mask it. */
+    @JvmOverloads
+    fun textSetting(key: String, default: String = "", configure: Action<SettingSpec>? = null) =
+        addSetting("text", key, default, configure)
+
+    /** One value out of a list; fill `options` in the block. */
+    @JvmOverloads
+    fun choiceSetting(key: String, default: String = "", configure: Action<SettingSpec>? = null) =
+        addSetting("choice", key, default, configure)
+
+    /** Zero or more values out of a list. */
+    @JvmOverloads
+    fun multiChoiceSetting(
+        key: String,
+        default: List<String> = emptyList(),
+        configure: Action<SettingSpec>? = null,
+    ) = addSetting("multichoice", key, default.joinToString(","), configure)
+
+    /** A folder chosen with the system picker; delivered as a URI string. */
+    @JvmOverloads
+    fun folderSetting(key: String, default: String = "", configure: Action<SettingSpec>? = null) =
+        addSetting("folder", key, default, configure)
+
+    /** A button that calls `runAction(key)` on the plugin. */
+    @JvmOverloads
+    fun actionSetting(key: String, configure: Action<SettingSpec>? = null) =
+        addSetting("action", key, null, configure)
+
+    private fun addSetting(type: String, key: String, default: String?, configure: Action<SettingSpec>?) {
+        val spec = SettingSpec().also { configure?.execute(it) }
+        settings.add(
+            SettingDeclaration(
+                type = type,
+                key = key,
+                label = spec.label.ifBlank { key },
+                description = spec.description,
+                group = spec.group,
+                advanced = spec.advanced,
+                defaultValue = default,
+                min = spec.min,
+                max = spec.max,
+                step = spec.step,
+                unit = spec.unit,
+                hint = spec.hint,
+                secret = spec.secret,
+                options = spec.options.map { it.first },
+                optionLabels = spec.options.map { it.second },
+                runningLabel = spec.runningLabel,
+            )
+        )
     }
 
     /** Declares a permission with a reason the user will actually read. */

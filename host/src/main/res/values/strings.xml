@@ -15,6 +15,13 @@
     <string name="action_running">Running</string>
     <string name="action_details">Details</string>
     <string name="action_view_code">View code</string>
+    <string name="action_settings">Settings</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_reset">Reset</string>
+    <string name="settings_none">This plugin has no settings.</string>
+    <string name="settings_show_advanced">Show advanced</string>
+    <string name="settings_hide_advanced">Hide advanced</string>
+    <string name="settings_pick_folder">Choose a folder…</string>
     <string name="action_dismiss">Dismiss</string>
     <string name="action_close">Close</string>
     <string name="action_cancel">Cancel</string>

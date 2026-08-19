@@ -10,6 +10,13 @@
     <string name="action_running">In esecuzione</string>
     <string name="action_details">Dettagli</string>
     <string name="action_view_code">Vedi codice</string>
+    <string name="action_settings">Impostazioni</string>
+    <string name="settings_save">Salva</string>
+    <string name="settings_reset">Ripristina</string>
+    <string name="settings_none">Questo plugin non ha impostazioni.</string>
+    <string name="settings_show_advanced">Mostra avanzate</string>
+    <string name="settings_hide_advanced">Nascondi avanzate</string>
+    <string name="settings_pick_folder">Scegli una cartella…</string>
     <string name="action_dismiss">Chiudi</string>
     <string name="action_close">Chiudi</string>
     <string name="action_cancel">Annulla</string>
