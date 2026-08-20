@@ -80,9 +80,9 @@
     <string name="permissions_state_undeclared">Non disponibile in questa build</string>
     <string name="permissions_state_not_applicable">Non serve su questa versione di Android</string>
     <string name="permissions_denied_title">Permesso negato</string>
-    <string name="permissions_denied_body">Android non lo chiederà più. Concedilo dalle impostazioni dell\'app, poi riavvia il plugin.</string>
+    <string name="permissions_denied_body">Android non lo chiederà più. Concedilo dalle impostazioni dell\’app, poi riavvia il plugin.</string>
     <string name="permissions_undeclared_title">Permesso non disponibile</string>
-    <string name="permissions_undeclared_body">Questa build di ZetaForge non dichiara %1$s, quindi Android non potrà mai concederlo. Aggiungilo a zetaforge.permissions e reinstalla l\'app.</string>
+    <string name="permissions_undeclared_body">Questa build di ZetaForge non dichiara %1$s, quindi Android non potrà mai concederlo. Aggiungilo a zetaforge.permissions e reinstalla l\’app.</string>
     <string name="special_access_title">Accesso speciale richiesto</string>
     <string name="special_access_body">%1$s va abilitato nelle impostazioni di Android. Ti porto sulla schermata giusta: torna qui quando hai finito.</string>
 
@@ -97,11 +97,11 @@
     <string name="details_package">Pacchetto</string>
     <string name="details_requested">Richiesti</string>
     <string name="details_bundled_deps">Dipendenze nel DEX del plugin</string>
-    <string name="details_host_deps">Fornite dall\'Host</string>
+    <string name="details_host_deps">Fornite dall\’Host</string>
     <string name="details_verification">Verifica</string>
     <string name="details_last_result">Ultimo risultato</string>
     <string name="details_scenarios">Scenari di errore (PoC)</string>
-    <string name="details_scenarios_body">Entrambi eseguono lo stesso plugin: l\'Host deve sopravvivere e riportare l\'errore.</string>
+    <string name="details_scenarios_body">Entrambi eseguono lo stesso plugin: l\’Host deve sopravvivere e riportare l\’errore.</string>
     <string name="details_scenario_unreachable">Host irraggiungibile</string>
     <string name="details_scenario_throw">Eccezione</string>
     <string name="details_no_description">Nessuna descrizione disponibile.</string>
@@ -126,4 +126,192 @@
     <string name="details_field_error_code">Codice errore</string>
     <string name="details_field_format">Formato</string>
     <string name="details_field_min_sdk">SDK minimo</string>
+
+    <!-- ===================================================================
+         Pianificazione
+         =================================================================== -->
+    <string name="schedule_title">Pianificazione</string>
+    <string name="action_schedule">Pianifica</string>
+    <string name="schedule_subtitle">Decidi quando %1$s si avvia da solo.</string>
+    <string name="schedule_enabled">Avvio automatico</string>
+    <string name="schedule_disabled_hint">Spento: il plugin parte solo quando premi Avvia.</string>
+    <string name="schedule_mode">Ogni quanto</string>
+    <string name="schedule_mode_manual">Solo manualmente</string>
+    <string name="schedule_mode_once">Una volta</string>
+    <string name="schedule_mode_interval">Ogni…</string>
+    <string name="schedule_mode_daily">Tutti i giorni</string>
+    <string name="schedule_mode_weekly">Giorni scelti</string>
+    <string name="schedule_time">Ora</string>
+    <string name="schedule_date">Data</string>
+    <string name="schedule_pick_time">Scegli l’ora</string>
+    <string name="schedule_pick_date">Scegli la data</string>
+    <string name="schedule_every">Ogni %1$s</string>
+    <string name="schedule_interval_minutes">%1$d minuti</string>
+    <string name="schedule_interval_hours">%1$d ore</string>
+    <string name="schedule_interval_hour">1 ora</string>
+    <string name="schedule_interval_day">1 giorno</string>
+    <string name="schedule_days">Giorni</string>
+    <string name="schedule_days_none">Scegli almeno un giorno.</string>
+    <string name="schedule_conditions">Solo quando</string>
+    <string name="schedule_requires_charging">In carica</string>
+    <string name="schedule_requires_charging_help">Il lavoro pesante è più gentile con la batteria mentre il telefono è collegato.</string>
+    <string name="schedule_requires_wifi">Sotto Wi-Fi</string>
+    <string name="schedule_requires_wifi_help">Non usa mai i dati mobili.</string>
+    <string name="schedule_requires_battery">Batteria sopra il 20%</string>
+    <string name="schedule_exact">Ora esatta</string>
+    <string name="schedule_exact_help">Sveglia il dispositivo al minuto. Senza, Android può ritardare l’avvio di qualche minuto per risparmiare batteria.</string>
+    <string name="schedule_exact_missing">Le sveglie esatte sono disattivate per ZetaForge, quindi l’avvio può ritardare di qualche minuto.</string>
+    <string name="schedule_next_run">Prossimo avvio</string>
+    <string name="schedule_next_none">Niente in programma</string>
+    <string name="schedule_last_run">Ultimo avvio</string>
+    <string name="schedule_never_run">Mai avviato</string>
+    <string name="schedule_run_count">%1$d avvii riusciti</string>
+    <string name="schedule_save">Salva pianificazione</string>
+    <string name="schedule_turn_off">Disattiva</string>
+    <string name="schedule_saved">%1$s verrà avviato %2$s</string>
+    <string name="schedule_cleared">%1$s partirà solo quando premi Avvia</string>
+    <string name="schedule_summary_once">una volta, %1$s</string>
+    <string name="schedule_summary_interval">ogni %1$s</string>
+    <string name="schedule_summary_daily">tutti i giorni alle %1$s</string>
+    <string name="schedule_summary_weekly">%1$s alle %2$s</string>
+    <string name="schedule_badge_scheduled">Pianificato</string>
+    <string name="schedule_missed_reason">L’avvio era previsto mentre il dispositivo era spento.</string>
+    <string name="schedule_result_success">Riuscito</string>
+    <string name="schedule_result_failure">Fallito</string>
+    <string name="schedule_result_skipped">Rimandato</string>
+    <string name="schedule_result_missed">Saltato</string>
+    <string name="schedule_min_interval">L’intervallo minimo è %1$d minuti: sotto, svegliare il dispositivo costa più del lavoro.</string>
+
+    <string name="condition_needs_charging">In attesa che il telefono sia in carica.</string>
+    <string name="condition_battery_low">Batteria troppo bassa: avvio rimandato.</string>
+    <string name="condition_needs_wifi">In attesa del Wi-Fi.</string>
+
+    <!-- ===================================================================
+         Notifiche
+         =================================================================== -->
+    <string name="channel_runs">Plugin in esecuzione</string>
+    <string name="channel_runs_description">Mostrata mentre un plugin lavora, con il suo avanzamento. Tenerla attiva è ciò che impedisce ad Android di congelare i processi lunghi.</string>
+    <string name="channel_results">Risultati</string>
+    <string name="channel_results_description">Come è finita ogni esecuzione.</string>
+    <string name="channel_schedule">Pianificazione</string>
+    <string name="channel_schedule_description">Avvii rimandati o saltati.</string>
+    <string name="channel_attention">Richiede attenzione</string>
+    <string name="channel_attention_description">Un’esecuzione non può continuare senza di te.</string>
+    <string name="notification_running_scheduled">Avviato come da programma…</string>
+    <string name="notification_subtext_scheduled">Avvio pianificato</string>
+    <string name="notification_subtext_scheduled_done">Pianificato · %1$s</string>
+    <string name="notification_result_success">%1$s completato</string>
+    <string name="notification_result_failure">%1$s fallito</string>
+    <string name="notification_result_no_message">Nessun messaggio.</string>
+    <string name="notification_skipped">%1$s rimandato</string>
+    <string name="notification_attention">%1$s richiede attenzione</string>
+    <string name="notification_plugin_missing">Il plugin non è più installato: avvio pianificato annullato.</string>
+    <string name="duration_ms">%1$d ms</string>
+    <string name="duration_s">%1$.1f s</string>
+    <string name="duration_m">%1$d m %2$d s</string>
+
+    <!-- ===================================================================
+         Prontezza del sistema
+         =================================================================== -->
+    <string name="readiness_title">Esecuzione in background</string>
+    <string name="readiness_subtitle">Cosa serve ad Android per gli avvii pianificati.</string>
+    <string name="readiness_all_good">C’è tutto quello che serve a un avvio pianificato.</string>
+    <string name="readiness_notifications">Notifiche</string>
+    <string name="readiness_notifications_body">Senza, un’esecuzione in background è invisibile e Android può fermarla.</string>
+    <string name="readiness_battery">Batteria senza restrizioni</string>
+    <string name="readiness_battery_body">Finché ZetaForge è ottimizzata, Android può ritardare un avvio pianificato di ore o togliergli la rete.</string>
+    <string name="readiness_exact">Sveglie esatte</string>
+    <string name="readiness_exact_body">Serve solo alle pianificazioni che devono partire al minuto.</string>
+    <string name="readiness_manufacturer">%1$s aggiunge i suoi limiti</string>
+    <string name="readiness_manufacturer_body">Oltre alle impostazioni di Android, %1$s può fermare le app in background per conto suo. Se gli avvii pianificati spariscono, consenti a ZetaForge di restare attiva nelle impostazioni batteria del telefono.</string>
+    <string name="readiness_fix">Sistema</string>
+    <string name="readiness_ok">OK</string>
+    <string name="readiness_open">Apri</string>
+
+    <!-- ===================================================================
+         Introduzione
+         =================================================================== -->
+    <string name="onboarding_skip">Salta</string>
+    <string name="onboarding_next">Avanti</string>
+    <string name="onboarding_back">Indietro</string>
+    <string name="onboarding_done">Inizia a usare ZetaForge</string>
+    <string name="onboarding_welcome_title">Il tuo telefono, programmabile</string>
+    <string name="onboarding_welcome_body">ZetaForge esegue plugin: programmi veri, scritti da te o da qualcuno di cui ti fidi, che fanno cose su questo dispositivo. Senza store, senza account.</string>
+    <string name="onboarding_trust_title">Un plugin non è un’app in una scatola</string>
+    <string name="onboarding_trust_body">Un plugin gira dentro ZetaForge, con i permessi che concedi a ZetaForge. Non è isolato. Installarne uno pesa quanto installare un’app: importa solo pacchetti di cui ti fidi.</string>
+    <string name="onboarding_trust_point_source">Il codice di ogni plugin si legge, qui dentro l’app.</string>
+    <string name="onboarding_trust_point_permissions">Ogni permesso viene chiesto con una motivazione, a ogni avvio.</string>
+    <string name="onboarding_trust_point_stop">Qualsiasi esecuzione si ferma dalla sua notifica.</string>
+    <string name="onboarding_schedule_title">Può lavorare mentre tu no</string>
+    <string name="onboarding_schedule_body">I plugin possono partire da soli — di notte, ogni ora, solo in carica — e continuare a schermo spento. Perché funzioni davvero, ad Android servono due cose da te.</string>
+    <string name="onboarding_ready_title">Sei pronto</string>
+    <string name="onboarding_ready_body">Importa un pacchetto .zeta per cominciare. Puoi cambiare tutto più tardi dal menu.</string>
+
+    <!-- ===================================================================
+         Menu, impostazioni e aiuto
+         =================================================================== -->
+    <string name="menu_open">Menu</string>
+    <string name="menu_app_settings">Impostazioni app</string>
+    <string name="menu_help">Come funziona</string>
+    <string name="menu_diagnostics">Diagnostica</string>
+    <string name="menu_about">Informazioni</string>
+    <string name="action_back">Indietro</string>
+
+    <string name="app_settings_title">Impostazioni app</string>
+    <string name="app_settings_appearance">Aspetto</string>
+    <string name="app_settings_theme">Tema</string>
+    <string name="app_settings_theme_system">Come il sistema</string>
+    <string name="app_settings_theme_light">Chiaro</string>
+    <string name="app_settings_theme_dark">Scuro</string>
+    <string name="app_settings_logs">Log</string>
+    <string name="app_settings_log_level">Mostra dal livello</string>
+    <string name="app_settings_notifications">Notifiche</string>
+    <string name="app_settings_notify_results">Notifica quando un’esecuzione finisce</string>
+    <string name="app_settings_notify_results_help">Anche un’esecuzione avviata a mano finisce a schermo spento. Disattivandola, gli avvii pianificati restano comunque notificati.</string>
+    <string name="app_settings_onboarding_again">Rivedi l’introduzione</string>
+    <string name="app_settings_danger">Dati</string>
+    <string name="app_settings_clear_logs">Svuota il log</string>
+
+    <string name="help_title">Come funziona</string>
+    <string name="help_what_title">Cos’è un plugin</string>
+    <string name="help_what_body">Un file .zeta che contiene Kotlin compilato e tutto ciò che gli serve. ZetaForge lo carica al momento e lo chiama: l’app non è mai stata costruita sapendo che esistesse.</string>
+    <string name="help_install_title">Installarne uno</string>
+    <string name="help_install_body">Premi Importa e scegli un file .zeta, oppure aprilo da un file manager. Viene copiato nella memoria privata di ZetaForge e verificato prima che qualcosa venga eseguito.</string>
+    <string name="help_settings_title">Configurarlo</string>
+    <string name="help_settings_body">Ogni plugin dichiara le sue impostazioni e ZetaForge ne costruisce il modulo. I valori predefiniti li sceglie chi ha scritto il plugin.</string>
+    <string name="help_schedule_title">Farlo partire da solo</string>
+    <string name="help_schedule_body">La pianificazione dice a ZetaForge quando avviare un plugin senza di te: un orario, un intervallo, giorni scelti, e condizioni come solo in carica.</string>
+    <string name="help_permissions_title">Permessi</string>
+    <string name="help_permissions_body">Un plugin dichiara cosa gli serve e perché. ZetaForge te lo chiede all’inizio di ogni esecuzione, e un rifiuto la ferma invece di farla fallire a metà.</string>
+    <string name="help_trouble_title">Se un avvio pianificato non avviene</string>
+    <string name="help_trouble_body">Quasi sempre è l’ottimizzazione della batteria. Apri Diagnostica: controlla tutto ciò che serve a un’esecuzione in background e ti porta dritto a ciò che manca.</string>
+    <string name="help_write_title">Scriverne uno</string>
+    <string name="help_write_body">I plugin si costruiscono con lo strumento a riga di comando zeta. Vedi la documentazione del progetto.</string>
+
+    <string name="diagnostics_title">Diagnostica</string>
+    <string name="diagnostics_subtitle">Tutto ciò che vale la pena controllare quando qualcosa non va.</string>
+    <string name="diagnostics_system">Sistema</string>
+    <string name="diagnostics_app">App</string>
+    <string name="diagnostics_plugins">Plugin</string>
+    <string name="diagnostics_schedules">Pianificazioni</string>
+    <string name="diagnostics_copy">Copia il rapporto</string>
+    <string name="diagnostics_copied">Rapporto copiato negli appunti</string>
+    <string name="diagnostics_device">Dispositivo</string>
+    <string name="diagnostics_android">Android</string>
+    <string name="diagnostics_app_version">ZetaForge</string>
+    <string name="diagnostics_host_api">Host API</string>
+    <string name="diagnostics_battery">Batteria</string>
+    <string name="diagnostics_charging">in carica</string>
+    <string name="diagnostics_not_charging">a batteria</string>
+    <string name="diagnostics_network">Rete</string>
+    <string name="diagnostics_network_unmetered">Wi-Fi (senza limiti)</string>
+    <string name="diagnostics_network_metered">a consumo oppure offline</string>
+    <string name="diagnostics_storage">Spazio libero</string>
+
+    <string name="about_title">Informazioni</string>
+    <string name="about_body">ZetaForge carica ed esegue plugin compilati fuori da questa app.</string>
+    <string name="about_version">Versione %1$s</string>
+    <string name="about_host_api">Host API %1$d · formato pacchetto %2$d</string>
+    <string name="about_trust_title">Il confine di fiducia</string>
+    <string name="about_trust_body">Un plugin gira dentro questa app con i permessi di questa app. Fra i due non c’è isolamento: importa solo ciò di cui ti fidi, e leggi il codice — viaggia dentro ogni pacchetto.</string>
 </resources>

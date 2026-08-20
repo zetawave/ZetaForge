@@ -43,6 +43,7 @@ own DEX. A Gradle task verifies that on the built APK.
 9b. [Permissions](#9b-permissions)
 10. [Proving Retrofit is not in the Host](#10-proving-retrofit-is-not-in-the-host)
 11. [Writing a plugin](#11-writing-a-plugin)
+11b. [Scheduling and notifications](#11b-scheduling-and-notifications)
 12. [Tests](#12-tests)
 13. [Developer scripts](#13-developer-scripts)
 14. [Dynamic Plugin Limitations](#14-dynamic-plugin-limitations)
@@ -746,6 +747,86 @@ a `.zeta` is as consequential as installing an app.
 * long runs report progress and can resume
 * destructive work writes to a temporary file and renames
 * `./gradlew :plugins:my-plugin:buildZetaPlugin` prints the entry point as found
+
+## 11b. Scheduling and notifications
+
+A plugin that only runs when someone presses a button is a tool. One that runs on
+its own is a service — and that is what scheduling turns ZetaForge into.
+
+### What the user sets
+
+**SCHEDULE** on any plugin card opens a panel with:
+
+| | |
+|---|---|
+| how often | once at a date and time, every N (15 min … 1 day), every day, or chosen weekdays |
+| time | a system time picker, honouring the 12/24-hour setting |
+| conditions | only while charging, only on Wi-Fi, only above 20% battery |
+| exact time | wakes the device at the minute, opt-in because it costs battery and, from Android 12, a permission |
+
+At the bottom sits a preview — next run, last run, how it went — computed by the
+same function the alarm uses. What the user is promised and what the system will
+do cannot diverge, which is the whole point of the panel.
+
+### How a run actually happens
+
+```
+AlarmManager  ──▶  ScheduleReceiver  ──▶  PluginExecutionService  ──▶  runtime.execute
+                        │                          │
+                        │                          └── notification: running, then the result
+                        └── conditions unmet? notify and re-arm instead
+```
+
+One alarm per plugin, always for the *next* run only: a repeating alarm cannot
+express "every Tuesday and Friday, unless it already ran", and it survives an
+edit badly. After each run the next alarm is set from the same
+`Schedule.nextRunAfter`.
+
+Schedules live beside the plugin, in `metadata/schedule.json`, so uninstalling a
+plugin takes its schedule with it and nothing can point at a plugin that is gone.
+
+`ScheduleReceiver` also re-arms everything on `BOOT_COMPLETED` and
+`MY_PACKAGE_REPLACED` — Android drops alarms on both — and tells the user about
+runs that were due while the device was off.
+
+### Execution moved into the service
+
+A scheduled run arrives as a broadcast in a process that may have no Activity at
+all, so `PluginExecutionService` now owns execution rather than merely
+accompanying it, and `ZetaForgeApp` owns the one runtime the process shares. Two
+copies of the runtime would each hold their own class loaders and their own idea
+of what is installed.
+
+### Notifications
+
+The rule, enforced in `ZetaNotifications`: **a run is never silent.** Started by
+hand or by an alarm, reporting progress or not, app on screen or closed for
+hours — something happened on the user's device with their permissions, and they
+are told. Four channels, so one can be silenced without losing the others:
+
+| channel | answers |
+|---|---|
+| `zetaforge.runs` | is something running right now? (ongoing, with progress) |
+| `zetaforge.results` | how did it end? |
+| `zetaforge.schedule` | what was postponed or missed? |
+| `zetaforge.attention` | something needs me before it can work |
+
+### The settings Android needs
+
+Scheduled work fails silently on a real phone for two reasons, and both are
+checked in one place (`SystemReadiness`) and shown in three — the first-run
+wizard, a banner on the plugin list, and Diagnostics:
+
+* **battery optimisation.** While the app is optimised Android can defer an alarm
+  for hours and cut its network. This is the one worth insisting on.
+* **notifications.** Without them a background run is invisible, and Android is
+  more willing to stop it.
+* **exact alarms**, only when a schedule asked for them.
+
+Every failing row has a button that opens the exact screen with the exact
+switch — "check your battery settings" is advice, not help. Where the phone is
+from a vendor known to add its own limits, the panel says so rather than letting
+the user conclude the app is broken.
 
 ## 12. Tests
 

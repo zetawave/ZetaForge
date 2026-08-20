@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Status-bar icon: Android renders it as a flat white silhouette at 24dp, so
+    the full mark would turn into a blob. This is the Z of the logo reduced to
+    what survives at that size - the bar, the diagonal, the bar - with the
+    forge's anvil foot kept because it is what makes it read as ours rather than
+    as a letter.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+
+    <!-- Top bar, with the crown notch of the mark. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M5,3h14v3.2h-14z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M10.6,1.2h2.8v2h-2.8z" />
+
+    <!-- The diagonal. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M17.6,3.6l2.6,2.2l-13.2,12.6l-2.6,-2.2z" />
+
+    <!-- Bottom bar and anvil foot. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M5,17.8h14v3.2h-14z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8.4,21h7.2v1.8h-7.2z" />
+</vector>

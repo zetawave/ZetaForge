@@ -21,9 +21,10 @@ import com.zetaforge.app.R
 // for state.
 // ---------------------------------------------------------------------------
 
-internal val Violet500 = Color(0xFF7C5CFF)
-internal val Violet400 = Color(0xFF9B85FF)
-internal val Violet700 = Color(0xFF5233D6)
+// Taken from the logo, so the app and the mark are the same product.
+internal val Violet500 = Color(0xFF2E5FA8)
+internal val Violet400 = Color(0xFF6FA0E0)
+internal val Violet700 = Color(0xFF16326B)
 internal val Cyan400 = Color(0xFF22D3EE)
 internal val Cyan600 = Color(0xFF0891B2)
 internal val Emerald400 = Color(0xFF34D399)

@@ -12,13 +12,17 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zetaforge.app.permission.ActivityPermissionGateway
+import com.zetaforge.app.ui.AppPreferences
 import com.zetaforge.app.ui.HostActions
 import com.zetaforge.app.ui.HostViewModel
+import com.zetaforge.app.ui.ReadinessItem
 import com.zetaforge.app.ui.ZetaForgeScreen
 import com.zetaforge.app.ui.theme.ZetaForgeTheme
 
@@ -69,6 +73,9 @@ class MainActivity : ComponentActivity() {
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Installed before super.onCreate, as the API requires: it replaces the
+        // blank window Android shows between the launcher and the first frame.
+        installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
@@ -83,8 +90,14 @@ class MainActivity : ComponentActivity() {
         viewModel.runtime.setPermissionGateway(permissionGateway)
 
         setContent {
-            ZetaForgeTheme {
-                val state by viewModel.state.collectAsStateWithLifecycle()
+            val state by viewModel.state.collectAsStateWithLifecycle()
+            val dark = when (state.preferences.theme) {
+                AppPreferences.Theme.SYSTEM -> isSystemInDarkTheme()
+                AppPreferences.Theme.LIGHT -> false
+                AppPreferences.Theme.DARK -> true
+            }
+
+            ZetaForgeTheme(darkTheme = dark) {
 
                 // SAF: the user picks any file; .zeta has no registered MIME type,
                 // so we accept everything and let the runtime reject non-packages.
@@ -127,6 +140,17 @@ class MainActivity : ComponentActivity() {
                             viewModel.dismissBlockedDialog()
                             permissionGateway.openAppSettings()
                         },
+                        onSchedule = viewModel::openSchedule,
+                        onScheduleEdit = viewModel::editSchedule,
+                        onScheduleSave = viewModel::saveSchedule,
+                        onScheduleClose = viewModel::closeSchedule,
+                        onFixReadiness = ::applyReadinessFix,
+                        onNavigate = viewModel::navigate,
+                        onBack = viewModel::back,
+                        onFinishOnboarding = viewModel::finishOnboarding,
+                        onReplayOnboarding = viewModel::replayOnboarding,
+                        onTheme = viewModel::setTheme,
+                        onNotifyResults = viewModel::setNotifyManualResults,
                     )
                 }
 
@@ -140,6 +164,39 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         ensureNotificationPermission()
+        // The user may have changed a system setting while away; the readiness
+        // panel is only useful if it tells the truth on the way back.
+        viewModel.refreshReadiness()
+    }
+
+    /**
+     * Takes the user to the exact switch a readiness item needs, and nowhere
+     * else. A settings screen the user has to navigate is a step where most
+     * people give up.
+     */
+    private fun applyReadinessFix(fix: ReadinessItem.Fix) {
+        when (fix) {
+            ReadinessItem.Fix.NotificationPermission -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED
+                ) {
+                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    // Already asked and refused, or an older Android: the app's
+                    // notification page is the only place left to change it.
+                    runCatching {
+                        startActivity(
+                            Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+                        )
+                    }.onFailure { permissionGateway.openAppSettings() }
+                }
+            }
+
+            is ReadinessItem.Fix.OpenIntent -> runCatching { startActivity(fix.intent) }
+                .onFailure { permissionGateway.openAppSettings() }
+        }
     }
 
     /**

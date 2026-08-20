@@ -7,6 +7,9 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.zetaforge.app.R
+import com.zetaforge.app.ZetaForgeApp
+import com.zetaforge.app.notify.ZetaNotifications
+import com.zetaforge.app.schedule.ScheduleAlarms
 import com.zetaforge.app.service.PluginExecutionService
 import com.zetaforge.runtime.ImportResult
 import com.zetaforge.runtime.PluginEntry
@@ -15,6 +18,7 @@ import com.zetaforge.runtime.log.ZetaLogRecord
 import com.zetaforge.runtime.permission.PermissionCoordinator
 import com.zetaforge.runtime.permission.PermissionPlan
 import com.zetaforge.runtime.permission.SpecialAccess
+import com.zetaforge.runtime.schedule.Schedule
 import com.zetaforge.runtime.pkg.PluginSourceFile
 import com.zetaforge.runtime.pkg.PluginSourceReader
 import com.zetaforge.runtime.settings.PluginSettingsStore
@@ -52,6 +56,12 @@ data class HostUiState(
     val specialAccessPrompt: SpecialAccessPrompt? = null,
     val blockedDialog: BlockedDialog? = null,
     val settingsDialog: SettingsState? = null,
+    val scheduleDialog: ScheduleState? = null,
+    val schedules: Map<String, Schedule> = emptyMap(),
+    val readiness: SystemReadiness? = null,
+    val route: Route = Route.PLUGINS,
+    val onboarding: Boolean = false,
+    val preferences: AppPreferences.Settings = AppPreferences.Settings(),
 ) {
     val filteredLogs: List<ZetaLogRecord>
         get() = logs.filter { it.level.ordinal >= minLevel.ordinal }
@@ -77,6 +87,22 @@ data class HostUiState(
         }
 
     fun isExpanded(pluginId: String): Boolean = expandedPlugins.contains(pluginId)
+
+    fun scheduleOf(pluginId: String): Schedule = schedules[pluginId] ?: Schedule.manual(pluginId)
+
+    /** Screens reachable from the menu. The plugin list is always the root. */
+    enum class Route { PLUGINS, APP_SETTINGS, HELP, DIAGNOSTICS, ABOUT }
+
+    /**
+     * The schedule being edited. Held apart from the saved one so that closing
+     * the dialog discards the edit rather than half-applying it.
+     */
+    data class ScheduleState(
+        val pluginId: String,
+        val pluginName: String,
+        val draft: Schedule,
+        val exactAllowed: Boolean = true,
+    )
 
     data class Banner(val message: String, val kind: Kind) {
         enum class Kind { SUCCESS, ERROR, INFO }
@@ -131,7 +157,13 @@ data class HostUiState(
  */
 class HostViewModel(application: Application) : AndroidViewModel(application) {
 
-    val runtime = ZetaPluginRuntime(application)
+    /**
+     * The one runtime the process shares. A scheduled run happens in a service
+     * with no view model, so ownership cannot live here any more.
+     */
+    val runtime: ZetaPluginRuntime = ZetaForgeApp.runtime(application)
+
+    val preferences = AppPreferences(application)
 
     private val ui = MutableStateFlow(HostUiState())
 
@@ -145,11 +177,17 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
         ui,
         runtime.plugins,
         runtime.logger.records,
-    ) { base, plugins, logs ->
+        runtime.schedules.schedules,
+        preferences.state,
+    ) { base, plugins, logs, schedules, prefs ->
         base.copy(
             plugins = plugins.sortedBy { it.installed.displayName },
             expandedPlugins = base.expandedPlugins.intersect(plugins.map { it.id }.toSet()),
             logs = logs,
+            schedules = schedules,
+            preferences = prefs,
+            minLevel = prefs.minLogLevel,
+            onboarding = base.onboarding || !prefs.onboardingDone,
             details = base.details?.let { details ->
                 plugins.firstOrNull { it.id == details.entry.id }
                     ?.let { details.copy(entry = it) } ?: details
@@ -159,6 +197,7 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch { runtime.refresh() }
+        refreshReadiness()
 
         // "Stop" in the notification asks the runtime to cancel; the job lives
         // here, so this is where the request is honoured.
@@ -239,17 +278,42 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun start(pluginId: String, input: Bundle = Bundle()) {
         val application = getApplication<Application>()
+        val started = System.currentTimeMillis()
         runningJob = viewModelScope.launch {
             PluginExecutionService.start(application)
             try {
                 val result = runtime.execute(pluginId, input)
                 (result as? PluginResult.Failure)?.let(::showPermissionBlockIfNeeded)
+                notifyResult(pluginId, result, System.currentTimeMillis() - started)
             } finally {
                 ZetaTaskCenter.end(pluginId)
                 PluginExecutionService.stop(application)
                 runningJob = null
             }
         }
+    }
+
+    /**
+     * A run started by hand still ends somewhere the user may not be looking:
+     * they lock the phone, switch apps, or the run takes an hour. So it is
+     * reported the same way a scheduled one is - unless they turned that off.
+     */
+    private fun notifyResult(pluginId: String, result: PluginResult, elapsed: Long) {
+        if (!preferences.state.value.notifyManualResults) return
+        val name = state.value.plugins.firstOrNull { it.id == pluginId }
+            ?.installed?.displayName ?: pluginId
+        ZetaNotifications.result(
+            context = getApplication(),
+            pluginId = pluginId,
+            pluginName = name,
+            success = result is PluginResult.Success,
+            message = when (result) {
+                is PluginResult.Success -> result.message
+                is PluginResult.Failure -> result.message
+            },
+            durationMs = if (result.durationMs > 0) result.durationMs else elapsed,
+            scheduled = false,
+        )
     }
 
     /** Failure scenario used by the PoC: unreachable host, so the plugin fails. */
@@ -460,7 +524,7 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setMinLevel(level: ZetaLogLevel) {
-        ui.value = ui.value.copy(minLevel = level)
+        preferences.setMinLogLevel(level)
     }
 
     fun toggleLogsExpanded() {
@@ -474,6 +538,114 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
     fun dismissBanner() {
         ui.value = ui.value.copy(banner = null)
     }
+
+    // -- scheduling ----------------------------------------------------------
+
+    fun openSchedule(entry: PluginEntry) {
+        ui.value = ui.value.copy(
+            scheduleDialog = HostUiState.ScheduleState(
+                pluginId = entry.id,
+                pluginName = entry.installed.displayName,
+                draft = runtime.schedules.get(entry.id),
+                exactAllowed = ScheduleAlarms.canScheduleExact(getApplication()),
+            )
+        )
+    }
+
+    /** Every edit in the dialog goes through here, on the draft only. */
+    fun editSchedule(transform: (Schedule) -> Schedule) {
+        val current = ui.value.scheduleDialog ?: return
+        ui.value = ui.value.copy(scheduleDialog = current.copy(draft = transform(current.draft)))
+    }
+
+    fun closeSchedule() {
+        ui.value = ui.value.copy(scheduleDialog = null)
+    }
+
+    /**
+     * Saves the schedule and arms the alarm in the same breath: a schedule the
+     * user was shown but that never reached AlarmManager is the worst outcome,
+     * because it looks like it worked.
+     */
+    fun saveSchedule() {
+        val current = ui.value.scheduleDialog ?: return
+        val draft = current.draft
+        runtime.schedules.save(draft)
+
+        val next = ScheduleAlarms.schedule(getApplication(), draft)
+        runtime.logger.info(
+            "Scheduler",
+            draft.pluginId,
+            if (next != null) {
+                "Scheduled: " + ScheduleFormatter.summary(getApplication(), draft) +
+                    ", next " + ScheduleFormatter.dateTime(getApplication(), next)
+            } else {
+                "Schedule cleared"
+            },
+        )
+
+        val banner = if (draft.isAutomatic && next != null) {
+            HostUiState.Banner(
+                string(
+                    R.string.schedule_saved,
+                    current.pluginName,
+                    ScheduleFormatter.summary(getApplication(), draft),
+                ),
+                HostUiState.Banner.Kind.SUCCESS,
+            )
+        } else {
+            HostUiState.Banner(
+                string(R.string.schedule_cleared, current.pluginName),
+                HostUiState.Banner.Kind.INFO,
+            )
+        }
+
+        ui.value = ui.value.copy(scheduleDialog = null, banner = banner)
+        refreshReadiness()
+    }
+
+    /** Turns a schedule off from the card, without opening the dialog. */
+    fun disableSchedule(pluginId: String) {
+        val current = runtime.schedules.get(pluginId)
+        runtime.schedules.save(current.copy(enabled = false))
+        ScheduleAlarms.cancel(getApplication(), pluginId)
+        refreshReadiness()
+    }
+
+    // -- system readiness -----------------------------------------------------
+
+    /** Cheap enough to re-read whenever the app comes back to the foreground. */
+    fun refreshReadiness() {
+        val wantsExact = runtime.schedules.automatic().any { it.exact }
+        ui.value = ui.value.copy(
+            readiness = SystemReadiness.read(getApplication(), wantsExact)
+        )
+    }
+
+    // -- navigation and preferences -------------------------------------------
+
+    fun navigate(route: HostUiState.Route) {
+        ui.value = ui.value.copy(route = route)
+    }
+
+    fun back() {
+        ui.value = ui.value.copy(route = HostUiState.Route.PLUGINS)
+    }
+
+    fun finishOnboarding() {
+        preferences.setOnboardingDone(true)
+        ui.value = ui.value.copy(onboarding = false)
+        refreshReadiness()
+    }
+
+    fun replayOnboarding() {
+        preferences.setOnboardingDone(false)
+        ui.value = ui.value.copy(onboarding = true, route = HostUiState.Route.PLUGINS)
+    }
+
+    fun setTheme(theme: AppPreferences.Theme) = preferences.setTheme(theme)
+
+    fun setNotifyManualResults(enabled: Boolean) = preferences.setNotifyManualResults(enabled)
 
     private fun string(@StringRes id: Int, vararg args: Any): String =
         getApplication<Application>().getString(id, *args)

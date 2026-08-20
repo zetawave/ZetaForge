@@ -16,6 +16,7 @@ import com.zetaforge.runtime.permission.PermissionDecision
 import com.zetaforge.runtime.permission.PermissionGateway
 import com.zetaforge.runtime.permission.PermissionInspector
 import com.zetaforge.runtime.permission.PermissionPlan
+import com.zetaforge.runtime.schedule.ScheduleStore
 import com.zetaforge.runtime.settings.PluginSettingsStore
 import com.zetaforge.runtime.task.ZetaTaskCenter
 import com.zetaforge.runtime.verify.BasicPluginVerifier
@@ -94,6 +95,13 @@ class ZetaPluginRuntime(
 
     /** Saved parameter values, one file per plugin. */
     val settings = PluginSettingsStore(storage)
+
+    /**
+     * When each plugin runs on its own. Lives here rather than in the Host
+     * because the alarm that fires a scheduled run arrives in a fresh process
+     * with no UI: the runtime is the only thing both paths share.
+     */
+    val schedules = ScheduleStore(storage)
 
     private val installer = PluginInstaller(
         storage = storage,
@@ -179,6 +187,9 @@ class ZetaPluginRuntime(
                     ?: PluginEntry(plugin, PluginState.INSTALLED)
             }
         }
+        // Schedules are files beside the plugins, so what is on disk is the
+        // truth after an install, an uninstall, or a restart in a new process.
+        schedules.reload()
         logger.info(SOURCE, null, "Discovered ${installed.size} installed plugin(s)")
     }
 
@@ -336,6 +347,9 @@ class ZetaPluginRuntime(
     /** Removes a plugin from disk. */
     suspend fun uninstall(pluginId: String) {
         unload(pluginId)
+        // Dropped before the files go: a schedule pointing at a plugin that no
+        // longer exists would keep waking the device for nothing.
+        schedules.delete(pluginId)
         withContext(dispatcher) { installer.uninstall(pluginId) }
         mutex.withLock { _plugins.value = _plugins.value.filterNot { it.id == pluginId } }
     }

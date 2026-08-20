@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -36,10 +37,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zetaforge.app.R
+import com.zetaforge.app.ui.ScheduleFormatter
+import com.zetaforge.runtime.schedule.Schedule
 import com.zetaforge.app.ui.theme.MonoStyle
 import com.zetaforge.app.ui.theme.zetaAccents
 import com.zetaforge.runtime.PluginEntry
@@ -58,11 +62,13 @@ import com.zetaforge.sdk.PluginResult
 fun PluginCard(
     entry: PluginEntry,
     expanded: Boolean,
+    schedule: Schedule,
     onToggleExpanded: () -> Unit,
     onStart: () -> Unit,
     onDetails: () -> Unit,
     onViewCode: () -> Unit,
     onSettings: () -> Unit,
+    onSchedule: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val accents = zetaAccents()
@@ -115,6 +121,10 @@ fun PluginCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (schedule.isAutomatic) {
+                        Spacer(Modifier.height(4.dp))
+                        SchedulePill(schedule)
+                    }
                 }
                 Spacer(Modifier.width(8.dp))
                 StatePill(entry.state)
@@ -208,15 +218,28 @@ fun PluginCard(
 
             AnimatedVisibility(visible = expanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(
-                        onClick = onSettings,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        Icon(Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.action_settings).uppercase(), maxLines = 1)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = onSettings,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.action_settings).uppercase(), maxLines = 1)
+                        }
+                        OutlinedButton(
+                            onClick = onSchedule,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(Icons.Outlined.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.action_schedule).uppercase(), maxLines = 1)
+                        }
                     }
+
+                    if (schedule.isAutomatic) ScheduleSummary(schedule)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedButton(
                             onClick = onViewCode,
@@ -327,4 +350,76 @@ internal fun formatSize(bytes: Long): String = when {
     bytes >= 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
     bytes >= 1024 -> String.format("%.0f KB", bytes / 1024.0)
     else -> bytes.toString() + " B"
+}
+
+/**
+ * The badge on a scheduled plugin. Small on purpose: it is a fact about the
+ * plugin, not a call to action.
+ */
+@Composable
+private fun SchedulePill(schedule: Schedule) {
+    val context = LocalContext.current
+    Surface(
+        shape = RoundedCornerShape(9.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+    ) {
+        Row(
+            Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Outlined.Schedule,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Spacer(Modifier.width(5.dp))
+            Text(
+                ScheduleFormatter.summary(context, schedule),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** When it will next happen, and how the last one went. */
+@Composable
+private fun ScheduleSummary(schedule: Schedule) {
+    val context = LocalContext.current
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row {
+                Text(
+                    stringResource(R.string.schedule_next_run),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    ScheduleFormatter.nextRun(context, schedule),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Row {
+                Text(
+                    stringResource(R.string.schedule_last_run),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    ScheduleFormatter.lastRun(context, schedule),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        }
+    }
 }

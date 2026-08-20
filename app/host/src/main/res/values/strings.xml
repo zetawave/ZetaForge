@@ -131,4 +131,192 @@
     <string name="details_field_error_code">Error code</string>
     <string name="details_field_format">Format</string>
     <string name="details_field_min_sdk">Min SDK</string>
+
+    <!-- ===================================================================
+         Scheduling
+         =================================================================== -->
+    <string name="schedule_title">Schedule</string>
+    <string name="action_schedule">Schedule</string>
+    <string name="schedule_subtitle">Decide when %1$s runs on its own.</string>
+    <string name="schedule_enabled">Run automatically</string>
+    <string name="schedule_disabled_hint">Off — the plugin only runs when you press Start.</string>
+    <string name="schedule_mode">How often</string>
+    <string name="schedule_mode_manual">Only manually</string>
+    <string name="schedule_mode_once">Once</string>
+    <string name="schedule_mode_interval">Every…</string>
+    <string name="schedule_mode_daily">Every day</string>
+    <string name="schedule_mode_weekly">Chosen days</string>
+    <string name="schedule_time">Time</string>
+    <string name="schedule_date">Date</string>
+    <string name="schedule_pick_time">Pick a time</string>
+    <string name="schedule_pick_date">Pick a date</string>
+    <string name="schedule_every">Every %1$s</string>
+    <string name="schedule_interval_minutes">%1$d minutes</string>
+    <string name="schedule_interval_hours">%1$d hours</string>
+    <string name="schedule_interval_hour">1 hour</string>
+    <string name="schedule_interval_day">1 day</string>
+    <string name="schedule_days">Days</string>
+    <string name="schedule_days_none">Pick at least one day.</string>
+    <string name="schedule_conditions">Only when</string>
+    <string name="schedule_requires_charging">Charging</string>
+    <string name="schedule_requires_charging_help">Heavy work is kinder to the battery while plugged in.</string>
+    <string name="schedule_requires_wifi">On Wi-Fi</string>
+    <string name="schedule_requires_wifi_help">Never uses mobile data.</string>
+    <string name="schedule_requires_battery">Battery above 20%</string>
+    <string name="schedule_exact">Exact time</string>
+    <string name="schedule_exact_help">Wakes the device at the minute. Without it Android may delay the run by a few minutes to save battery.</string>
+    <string name="schedule_exact_missing">Exact alarms are turned off for ZetaForge, so the run may be a few minutes late.</string>
+    <string name="schedule_next_run">Next run</string>
+    <string name="schedule_next_none">Nothing scheduled</string>
+    <string name="schedule_last_run">Last run</string>
+    <string name="schedule_never_run">Never run yet</string>
+    <string name="schedule_run_count">%1$d successful runs</string>
+    <string name="schedule_save">Save schedule</string>
+    <string name="schedule_turn_off">Turn off</string>
+    <string name="schedule_saved">%1$s will run %2$s</string>
+    <string name="schedule_cleared">%1$s will only run when you press Start</string>
+    <string name="schedule_summary_once">once, %1$s</string>
+    <string name="schedule_summary_interval">every %1$s</string>
+    <string name="schedule_summary_daily">every day at %1$s</string>
+    <string name="schedule_summary_weekly">%1$s at %2$s</string>
+    <string name="schedule_badge_scheduled">Scheduled</string>
+    <string name="schedule_missed_reason">The run was due while the device was off.</string>
+    <string name="schedule_result_success">Succeeded</string>
+    <string name="schedule_result_failure">Failed</string>
+    <string name="schedule_result_skipped">Skipped</string>
+    <string name="schedule_result_missed">Missed</string>
+    <string name="schedule_min_interval">The shortest interval is %1$d minutes — below that, waking the device costs more than the work.</string>
+
+    <string name="condition_needs_charging">Waiting until the phone is charging.</string>
+    <string name="condition_battery_low">Battery too low; the run was postponed.</string>
+    <string name="condition_needs_wifi">Waiting for Wi-Fi.</string>
+
+    <!-- ===================================================================
+         Notifications
+         =================================================================== -->
+    <string name="channel_runs">Running plugins</string>
+    <string name="channel_runs_description">Shown while a plugin is working, with its progress. Keeping this on is what stops Android from freezing long tasks.</string>
+    <string name="channel_results">Results</string>
+    <string name="channel_results_description">How each run ended.</string>
+    <string name="channel_schedule">Schedule</string>
+    <string name="channel_schedule_description">Runs that were postponed or missed.</string>
+    <string name="channel_attention">Needs you</string>
+    <string name="channel_attention_description">A run cannot continue without you.</string>
+    <string name="notification_running_scheduled">Started on schedule…</string>
+    <string name="notification_subtext_scheduled">Scheduled run</string>
+    <string name="notification_subtext_scheduled_done">Scheduled · %1$s</string>
+    <string name="notification_result_success">%1$s finished</string>
+    <string name="notification_result_failure">%1$s failed</string>
+    <string name="notification_result_no_message">No message.</string>
+    <string name="notification_skipped">%1$s was postponed</string>
+    <string name="notification_attention">%1$s needs you</string>
+    <string name="notification_plugin_missing">The plugin is no longer installed, so the scheduled run was cancelled.</string>
+    <string name="duration_ms">%1$d ms</string>
+    <string name="duration_s">%1$.1f s</string>
+    <string name="duration_m">%1$d m %2$d s</string>
+
+    <!-- ===================================================================
+         System readiness
+         =================================================================== -->
+    <string name="readiness_title">Background readiness</string>
+    <string name="readiness_subtitle">What scheduled runs need from Android.</string>
+    <string name="readiness_all_good">Everything a scheduled run needs is in place.</string>
+    <string name="readiness_notifications">Notifications</string>
+    <string name="readiness_notifications_body">Without them a background run is invisible, and Android may stop it.</string>
+    <string name="readiness_battery">Unrestricted battery</string>
+    <string name="readiness_battery_body">While ZetaForge is optimised, Android can delay a scheduled run by hours or cut its network.</string>
+    <string name="readiness_exact">Exact alarms</string>
+    <string name="readiness_exact_body">Needed only for schedules that must fire at the minute.</string>
+    <string name="readiness_manufacturer">%1$s adds its own limits</string>
+    <string name="readiness_manufacturer_body">Beyond Android’s settings, %1$s may stop background apps on its own. If scheduled runs go missing, allow ZetaForge to run in the background in the phone’s own battery settings.</string>
+    <string name="readiness_fix">Fix</string>
+    <string name="readiness_ok">OK</string>
+    <string name="readiness_open">Open</string>
+
+    <!-- ===================================================================
+         Onboarding
+         =================================================================== -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_done">Start using ZetaForge</string>
+    <string name="onboarding_welcome_title">Your phone, programmable</string>
+    <string name="onboarding_welcome_body">ZetaForge runs plugins: real programs, written by you or by someone you trust, that do things on this device. No store, no account.</string>
+    <string name="onboarding_trust_title">A plugin is not an app in a box</string>
+    <string name="onboarding_trust_body">A plugin runs inside ZetaForge, with the permissions you grant to ZetaForge. It is not sandboxed. Installing one is as consequential as installing an app — so only import packages you trust.</string>
+    <string name="onboarding_trust_point_source">You can read the source of any plugin, right here in the app.</string>
+    <string name="onboarding_trust_point_permissions">Every permission is asked for with a reason, every time it runs.</string>
+    <string name="onboarding_trust_point_stop">Any run can be stopped from its notification.</string>
+    <string name="onboarding_schedule_title">It can work while you don’t</string>
+    <string name="onboarding_schedule_body">Plugins can run on a schedule — nightly, hourly, only while charging — and keep going with the screen off. Android needs two things from you for that to be reliable.</string>
+    <string name="onboarding_ready_title">You’re set</string>
+    <string name="onboarding_ready_body">Import a .zeta package to get started. You can change any of this later from the menu.</string>
+
+    <!-- ===================================================================
+         Menu, settings and help
+         =================================================================== -->
+    <string name="menu_open">Menu</string>
+    <string name="menu_app_settings">App settings</string>
+    <string name="menu_help">How it works</string>
+    <string name="menu_diagnostics">Diagnostics</string>
+    <string name="menu_about">About</string>
+    <string name="action_back">Back</string>
+
+    <string name="app_settings_title">App settings</string>
+    <string name="app_settings_appearance">Appearance</string>
+    <string name="app_settings_theme">Theme</string>
+    <string name="app_settings_theme_system">Follow the system</string>
+    <string name="app_settings_theme_light">Light</string>
+    <string name="app_settings_theme_dark">Dark</string>
+    <string name="app_settings_logs">Logs</string>
+    <string name="app_settings_log_level">Show from level</string>
+    <string name="app_settings_notifications">Notifications</string>
+    <string name="app_settings_notify_results">Notify when a run ends</string>
+    <string name="app_settings_notify_results_help">A run started by hand also finishes when the screen is off. Turning this off leaves scheduled runs notified anyway.</string>
+    <string name="app_settings_onboarding_again">Show the introduction again</string>
+    <string name="app_settings_danger">Data</string>
+    <string name="app_settings_clear_logs">Clear the log</string>
+
+    <string name="help_title">How it works</string>
+    <string name="help_what_title">What is a plugin</string>
+    <string name="help_what_body">A .zeta file containing compiled Kotlin and everything it needs. ZetaForge loads it at run time and calls it — the app was never built with any knowledge of it.</string>
+    <string name="help_install_title">Installing one</string>
+    <string name="help_install_body">Press Import and pick a .zeta file, or open one from a file manager. It is copied into ZetaForge’s private storage and verified before anything runs.</string>
+    <string name="help_settings_title">Configuring one</string>
+    <string name="help_settings_body">Each plugin declares its own settings, and ZetaForge builds the form. Defaults are chosen by whoever wrote the plugin.</string>
+    <string name="help_schedule_title">Running it on its own</string>
+    <string name="help_schedule_body">Schedule tells ZetaForge when to run a plugin without you: a time, an interval, chosen days, and conditions such as only while charging.</string>
+    <string name="help_permissions_title">Permissions</string>
+    <string name="help_permissions_body">A plugin declares what it needs and why. ZetaForge asks you at the start of every run, and a refusal stops the run instead of failing halfway.</string>
+    <string name="help_trouble_title">If a scheduled run does not happen</string>
+    <string name="help_trouble_body">Almost always battery optimisation. Open Diagnostics: it checks everything a background run needs and takes you straight to whatever is missing.</string>
+    <string name="help_write_title">Writing your own</string>
+    <string name="help_write_body">Plugins are built with the zeta command line tool. See the project documentation.</string>
+
+    <string name="diagnostics_title">Diagnostics</string>
+    <string name="diagnostics_subtitle">Everything worth checking when something does not work.</string>
+    <string name="diagnostics_system">System</string>
+    <string name="diagnostics_app">App</string>
+    <string name="diagnostics_plugins">Plugins</string>
+    <string name="diagnostics_schedules">Schedules</string>
+    <string name="diagnostics_copy">Copy report</string>
+    <string name="diagnostics_copied">Report copied to the clipboard</string>
+    <string name="diagnostics_device">Device</string>
+    <string name="diagnostics_android">Android</string>
+    <string name="diagnostics_app_version">ZetaForge</string>
+    <string name="diagnostics_host_api">Host API</string>
+    <string name="diagnostics_battery">Battery</string>
+    <string name="diagnostics_charging">charging</string>
+    <string name="diagnostics_not_charging">on battery</string>
+    <string name="diagnostics_network">Network</string>
+    <string name="diagnostics_network_unmetered">Wi-Fi (unmetered)</string>
+    <string name="diagnostics_network_metered">metered or offline</string>
+    <string name="diagnostics_storage">Free space</string>
+
+    <string name="about_title">About</string>
+    <string name="about_body">ZetaForge loads and runs plugins that were compiled outside this app.</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_host_api">Host API %1$d · package format %2$d</string>
+    <string name="about_trust_title">The trust boundary</string>
+    <string name="about_trust_body">A plugin runs inside this app with this app’s permissions. There is no sandbox between them: import only what you trust, and read the source — it ships inside every package.</string>
 </resources>

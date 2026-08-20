@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
+        android:name=".ZetaForgeApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -24,7 +25,7 @@
             android:label="@string/app_name"
             android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
-            android:theme="@style/Theme.ZetaForge">
+            android:theme="@style/Theme.ZetaForge.Splash">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -49,6 +50,25 @@
             android:name=".service.PluginExecutionService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!--
+            Fires scheduled runs, and puts every alarm back after a reboot or an
+            app update - Android drops them on both, and a backup that silently
+            stops working after a restart is worse than one that never did.
+        -->
+        <receiver
+            android:name=".schedule.ScheduleReceiver"
+            android:exported="false"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="com.zetaforge.app.action.SCHEDULE_FIRE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

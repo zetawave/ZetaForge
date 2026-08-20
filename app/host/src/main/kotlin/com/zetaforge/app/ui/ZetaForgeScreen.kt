@@ -1,5 +1,6 @@
 package com.zetaforge.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,16 +24,29 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.MonitorHeart
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -40,6 +54,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -55,11 +73,19 @@ import com.zetaforge.app.ui.components.PermissionRequestDialog
 import com.zetaforge.app.ui.components.PluginCard
 import com.zetaforge.app.ui.components.PluginDetailsSheet
 import com.zetaforge.app.ui.components.PluginSettingsDialog
+import com.zetaforge.app.ui.components.ReadinessPanel
+import com.zetaforge.app.ui.components.ScheduleDialog
 import com.zetaforge.app.ui.components.SectionHeader
 import com.zetaforge.app.ui.components.SpecialAccessDialog
 import com.zetaforge.app.ui.components.ZetaLogo
+import com.zetaforge.app.ui.screens.AboutScreen
+import com.zetaforge.app.ui.screens.AppSettingsScreen
+import com.zetaforge.app.ui.screens.DiagnosticsScreen
+import com.zetaforge.app.ui.screens.HelpScreen
+import com.zetaforge.app.ui.screens.OnboardingScreen
 import com.zetaforge.app.ui.theme.zetaAccents
 import com.zetaforge.runtime.PluginEntry
+import com.zetaforge.runtime.schedule.Schedule
 import com.zetaforge.sdk.ZetaLogLevel
 
 /** Actions the screen can trigger; implemented by the view model. */
@@ -91,6 +117,17 @@ data class HostActions(
     val onSpecialAccessResult: (Boolean) -> Unit,
     val onDismissBlocked: () -> Unit,
     val onOpenAppSettings: () -> Unit,
+    val onSchedule: (PluginEntry) -> Unit,
+    val onScheduleEdit: ((Schedule) -> Schedule) -> Unit,
+    val onScheduleSave: () -> Unit,
+    val onScheduleClose: () -> Unit,
+    val onFixReadiness: (ReadinessItem.Fix) -> Unit,
+    val onNavigate: (HostUiState.Route) -> Unit,
+    val onBack: () -> Unit,
+    val onFinishOnboarding: () -> Unit,
+    val onReplayOnboarding: () -> Unit,
+    val onTheme: (AppPreferences.Theme) -> Unit,
+    val onNotifyResults: (Boolean) -> Unit,
 )
 
 /**
@@ -99,12 +136,53 @@ data class HostActions(
  * in landscape, foldables, tablets and desktop-sized windows. The log console
  * can also take over the whole screen.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
+    // The wizard owns the whole window: nothing else is useful until the user
+    // has been told what a plugin is.
+    if (state.onboarding) {
+        OnboardingScreen(
+            readiness = state.readiness,
+            onFix = actions.onFixReadiness,
+            onFinish = actions.onFinishOnboarding,
+        )
+        return
+    }
+
+    BackHandler(enabled = state.route != HostUiState.Route.PLUGINS) { actions.onBack() }
+    BackHandler(enabled = state.logsExpanded) { actions.onToggleLogs() }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.systemBars,
+        topBar = {
+            // The console taking over the screen is a mode, not a place: a bar
+            // above it would only steal height from what the user asked to read.
+            if (!state.logsExpanded) ZetaTopBar(state, actions)
+        },
     ) { padding ->
+        if (state.route != HostUiState.Route.PLUGINS) {
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                when (state.route) {
+                    HostUiState.Route.APP_SETTINGS -> AppSettingsScreen(
+                        state = state,
+                        onTheme = actions.onTheme,
+                        onLogLevel = actions.onLevelChange,
+                        onNotifyResults = actions.onNotifyResults,
+                        onReplayOnboarding = actions.onReplayOnboarding,
+                        onClearLogs = actions.onClearLogs,
+                    )
+
+                    HostUiState.Route.HELP -> HelpScreen()
+                    HostUiState.Route.DIAGNOSTICS -> DiagnosticsScreen(state, actions.onFixReadiness)
+                    HostUiState.Route.ABOUT -> AboutScreen()
+                    HostUiState.Route.PLUGINS -> Unit
+                }
+            }
+            return@Scaffold
+        }
+
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
@@ -200,6 +278,15 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
         )
     }
 
+    state.scheduleDialog?.let { schedule ->
+        ScheduleDialog(
+            state = schedule,
+            onEdit = actions.onScheduleEdit,
+            onSave = actions.onScheduleSave,
+            onDismiss = actions.onScheduleClose,
+        )
+    }
+
     state.codeViewer?.let { viewer ->
         CodeViewerDialog(
             pluginName = viewer.pluginName,
@@ -250,6 +337,19 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
             item { BannerCard(banner, actions.onDismissBanner) }
         }
 
+        // Only once something is actually scheduled: before that, asking for
+        // battery exemptions is noise.
+        val anyScheduled = state.schedules.values.any { it.isAutomatic }
+        if (anyScheduled && state.readiness?.allGood == false) {
+            item {
+                ReadinessPanel(
+                    readiness = state.readiness,
+                    onFix = actions.onFixReadiness,
+                    showWhenSatisfied = false,
+                )
+            }
+        }
+
         item {
             val visible = state.visiblePlugins
             SectionHeader(
@@ -278,11 +378,13 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
                 PluginCard(
                     entry = entry,
                     expanded = state.isExpanded(entry.id),
+                    schedule = state.scheduleOf(entry.id),
                     onToggleExpanded = { actions.onToggleCard(entry) },
                     onStart = { actions.onStart(entry) },
                     onDetails = { actions.onDetails(entry) },
                     onViewCode = { actions.onViewCode(entry) },
                     onSettings = { actions.onSettings(entry) },
+                    onSchedule = { actions.onSchedule(entry) },
                 )
             }
         }
@@ -469,4 +571,98 @@ private fun EmptyState() {
             )
         }
     }
+}
+
+/**
+ * The bar above everything: identity on the left, the way out of a sub-screen,
+ * and the menu.
+ *
+ * The menu icon carries a badge when the system is not ready for scheduled runs
+ * — the one piece of state that is worth interrupting a user about, because
+ * without it their schedules quietly do nothing.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ZetaTopBar(state: HostUiState, actions: HostActions) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val onRoot = state.route == HostUiState.Route.PLUGINS
+    val problems = if (state.schedules.values.any { it.isAutomatic }) {
+        state.readiness?.blockingCount ?: 0
+    } else {
+        0
+    }
+
+    CenterAlignedTopAppBar(
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+        ),
+        navigationIcon = {
+            if (onRoot) {
+                Box(Modifier.padding(start = 14.dp)) { ZetaLogo(size = 30.dp) }
+            } else {
+                IconButton(onClick = actions.onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.action_back),
+                    )
+                }
+            }
+        },
+        title = {
+            Text(
+                stringResource(
+                    when (state.route) {
+                        HostUiState.Route.PLUGINS -> R.string.app_name
+                        HostUiState.Route.APP_SETTINGS -> R.string.app_settings_title
+                        HostUiState.Route.HELP -> R.string.help_title
+                        HostUiState.Route.DIAGNOSTICS -> R.string.diagnostics_title
+                        HostUiState.Route.ABOUT -> R.string.about_title
+                    }
+                ),
+                style = MaterialTheme.typography.titleMedium,
+            )
+        },
+        actions = {
+            IconButton(onClick = { menuOpen = true }) {
+                BadgedBox(
+                    badge = { if (problems > 0) Badge { Text(problems.toString()) } },
+                ) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.menu_open))
+                }
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                MenuEntry(R.string.menu_app_settings, Icons.Outlined.Tune) {
+                    menuOpen = false
+                    actions.onNavigate(HostUiState.Route.APP_SETTINGS)
+                }
+                MenuEntry(R.string.menu_help, Icons.Outlined.HelpOutline) {
+                    menuOpen = false
+                    actions.onNavigate(HostUiState.Route.HELP)
+                }
+                MenuEntry(R.string.menu_diagnostics, Icons.Outlined.MonitorHeart, badge = problems) {
+                    menuOpen = false
+                    actions.onNavigate(HostUiState.Route.DIAGNOSTICS)
+                }
+                MenuEntry(R.string.menu_about, Icons.Outlined.Info) {
+                    menuOpen = false
+                    actions.onNavigate(HostUiState.Route.ABOUT)
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun MenuEntry(
+    labelRes: Int,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    badge: Int = 0,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(stringResource(labelRes)) },
+        leadingIcon = { Icon(icon, contentDescription = null) },
+        trailingIcon = { if (badge > 0) Badge { Text(badge.toString()) } },
+        onClick = onClick,
+    )
 }

@@ -1,8 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+        The launch theme. Android shows this between tapping the icon and the
+        first Compose frame; without it the user sees a white flash, which on a
+        dark-themed app looks like a bug.
+
+        Theme.ZetaForge is applied by the Activity itself once it is running.
+    -->
+    <style name="Theme.ZetaForge.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/zeta_brand_deep</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.ZetaForge</item>
+    </style>
+
     <style name="Theme.ZetaForge" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowBackground">@color/zeta_background</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 </resources>
