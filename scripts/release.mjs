@@ -7,7 +7,8 @@
  *   npm run release:major      3.0.0 -> 4.0.0   (a new Host API — see below)
  *   npm run release:dry        do everything except publish
  *
- * Flags: --no-github (npm only), --skip-tests, --yes, --force, --version <v>
+ * Flags: --no-github (npm only), --skip-tests, --yes, --force, --version <v>,
+ * --otp <code> (when the npm token does not bypass 2FA)
  *
  * It refuses to start on a dirty tree, on the wrong branch, or without the
  * credentials it will need at the end — because the worst possible release is
@@ -63,7 +64,7 @@ async function main() {
     // that fails after the tag has been pushed. A token in ~/.npmrc that has
     // expired fails exactly like never having logged in, and the message has
     // to tell the two apart.
-    const whoami = spawnSync("npm", ["whoami"], { encoding: "utf8", shell: true });
+    const whoami = spawnSync(executable("npm"), ["whoami"], { encoding: "utf8" });
     if (whoami.status !== 0) {
       fail(
         "npm rejected your credentials.",
@@ -208,11 +209,14 @@ async function main() {
  * read-only.
  */
 function publishToNpm() {
-  const result = spawnSync("npm", ["publish", "--access", "public"], {
+  // --otp is passed through when given, for a token that keeps 2FA on.
+  const publishArgs = ["publish", "--access", "public"];
+  if (args.otp) publishArgs.push("--otp", String(args.otp));
+
+  const result = spawnSync(executable("npm"), publishArgs, {
     cwd: cli,
     encoding: "utf8",
     stdio: "pipe",
-    shell: process.platform === "win32",
   });
   process.stdout.write(result.stdout || "");
   if (result.status === 0) return;
@@ -220,6 +224,18 @@ function publishToNpm() {
   const output = `${result.stdout || ""}${result.stderr || ""}`;
   process.stderr.write(output);
   const name = readJson(path.join(cli, "package.json")).name;
+
+  // A granular token that does not bypass 2FA needs a one-time password, and
+  // stdio is piped here so npm cannot prompt for one. Saying so beats leaving
+  // the developer with npm's "this operation requires a one-time password".
+  if (/one-time pass|EOTP|otp/i.test(output)) {
+    fail(
+      "npm wants a one-time password.",
+      "This token does not bypass 2FA. Either:\n" +
+        "    re-run with the code:  npm run release -- --otp 123456\n" +
+        "    or issue a token with \"Bypass two-factor authentication\" enabled.",
+    );
+  }
 
   if (/403|forbidden|not allowed to publish/i.test(output)) {
     fail(
@@ -326,21 +342,43 @@ function parseArgs(argv) {
     const token = argv[i];
     if (!token.startsWith("--")) continue;
     const key = token.slice(2);
-    if (["bump", "version"].includes(key)) out[key] = argv[++i];
+    if (["bump", "version", "otp"].includes(key)) out[key] = argv[++i];
     else out[key] = true;
   }
   return out;
 }
 
+/**
+ * Windows shims that cannot be spawned directly, because they are `.cmd` files
+ * rather than executables.
+ */
+const WINDOWS_SHIMS = { npm: "npm.cmd", npx: "npx.cmd" };
+
+/**
+ * The command to actually spawn, so that `shell` can stay off.
+ *
+ * This matters more than it looks. With `shell: true` on Windows every argument
+ * is handed to cmd.exe and re-parsed, so `git commit -m "release: v4.0.0"`
+ * arrives as `-m release:` plus a stray pathspec `v4.0.0`, and a tag message
+ * containing parentheses is mangled differently again. Naming the shim
+ * explicitly lets arguments through untouched, exactly as on Linux and macOS.
+ */
+function executable(command) {
+  if (process.platform !== "win32") return command;
+  return WINDOWS_SHIMS[command] ?? command;
+}
+
 function run(command, commandArgs, options = {}) {
-  const result = spawnSync(command, commandArgs, {
+  const result = spawnSync(executable(command), commandArgs, {
     cwd: options.cwd || root,
     encoding: "utf8",
     stdio: options.capture ? "pipe" : "inherit",
-    shell: process.platform === "win32",
   });
+  if (result.error) {
+    fail(`${command} could not be started.`, result.error.message);
+  }
   if (result.status !== 0 && !options.allowFailure) {
-    fail(`${command} ${commandArgs[0]} failed.`, result.stderr?.trim());
+    fail(`${command} ${commandArgs[0]} failed.`, (result.stderr || "").trim());
   }
   return result.stdout || "";
 }
@@ -358,7 +396,7 @@ function requireCommand(command, probe, message) {
 }
 
 function hasCommand(command, probe) {
-  const result = spawnSync(command, probe, { encoding: "utf8", shell: process.platform === "win32" });
+  const result = spawnSync(executable(command), probe, { encoding: "utf8" });
   return result.status === 0;
 }
 

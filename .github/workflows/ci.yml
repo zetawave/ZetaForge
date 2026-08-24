@@ -14,7 +14,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci --prefix zeta-cli
+      # Installed from the repository root: zeta-cli is an npm workspace and
+      # has no lockfile of its own, so `npm ci --prefix zeta-cli` has nothing
+      # to install from. The root lock covers every workspace.
+      - run: npm ci
       - run: npm test --prefix zeta-cli
       - run: npm run lint --prefix zeta-cli
 
@@ -42,7 +45,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install an SDK platform to compile against
+        run: sdkmanager "platforms;android-35"
+
       - name: Unit tests
         working-directory: app
         run: ./gradlew :runtime:test --console=plain
@@ -69,7 +77,7 @@ jobs:
           node scripts/gradle.mjs :plugin-api:apiJar
           node scripts/sync-assets.mjs
 
-      - run: npm ci --prefix zeta-cli
+      - run: npm ci
 
       # The real proof: scaffold a plugin from nothing and package it. Running it
       # needs a device, which is covered by the emulator job below.
@@ -100,7 +108,7 @@ jobs:
         run: |
           node scripts/gradle.mjs :plugin-api:apiJar :host:assembleDebug
           node scripts/sync-assets.mjs
-          npm ci --prefix zeta-cli
+          npm ci
 
       - name: Scaffold and run on an emulator
         uses: reactivecircus/android-emulator-runner@v2
