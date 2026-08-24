@@ -159,28 +159,44 @@ async function main() {
   // ---- 6. commit, tag, push ---------------------------------------------
   step("committing and tagging");
 
-  if (git(["tag", "--list", `v${version}`]).trim()) {
-    fail(
-      `The tag v${version} already exists.`,
-      "A version is published once. Bump it, or delete the tag if the release never completed:\n" +
+  const tagged = git(["tag", "--list", `v${version}`]).trim();
+
+  if (tagged) {
+    const tagPoints = git(["rev-list", "-n1", `v${version}`]).trim();
+    const head = git(["rev-parse", "HEAD"]).trim();
+    const onRegistry = publishedVersions().includes(version);
+
+    if (onRegistry) {
+      fail(
+        `${version} is already on npm.`,
+        "A version is published once, and npm does not allow reuse. Bump it.",
+      );
+    }
+    if (tagPoints !== head) {
+      fail(
+        `The tag v${version} exists and points somewhere else.`,
         `    git tag -d v${version} && git push --delete origin v${version}`,
-    );
-  }
-
-  git(["add", "-A"]);
-
-  // Re-releasing the current version after a failed attempt leaves nothing to
-  // commit, and `git commit` treats that as an error. The tag is what marks the
-  // release, so an empty commit would be noise rather than a record.
-  if (git(["status", "--porcelain"]).trim()) {
-    git(["commit", "-m", `release: v${version}`]);
+      );
+    }
+    // Tagged, never published: this is a retry of a release that got as far as
+    // pushing the tag. Everything before the publish is already done.
+    warn("resuming: the tag is already on this commit and npm has no such version");
   } else {
-    info("nothing to commit; tagging the current HEAD");
-  }
+    git(["add", "-A"]);
 
-  git(["tag", "-a", `v${version}`, "-m", `ZetaForge ${version} (Host API ${hostApi})`]);
-  git(["push", "origin", RELEASE_BRANCH]);
-  git(["push", "origin", `v${version}`]);
+    // Re-releasing the current version leaves nothing to commit, and
+    // `git commit` treats that as an error. The tag marks the release, so an
+    // empty commit would be noise rather than a record.
+    if (git(["status", "--porcelain"]).trim()) {
+      git(["commit", "-m", `release: v${version}`]);
+    } else {
+      info("nothing to commit; tagging the current HEAD");
+    }
+
+    git(["tag", "-a", `v${version}`, "-m", `ZetaForge ${version} (Host API ${hostApi})`]);
+    git(["push", "origin", RELEASE_BRANCH]);
+    git(["push", "origin", `v${version}`]);
+  }
 
   // ---- 7. publish --------------------------------------------------------
   step("publishing to npm");
@@ -209,6 +225,24 @@ async function main() {
  * own output: the name can belong to somebody else, and a token can be
  * read-only.
  */
+/**
+ * The versions npm already has, or an empty list when the package is new.
+ *
+ * A 404 here is the ordinary answer for a package that has never been
+ * published, so it is not treated as a failure.
+ */
+function publishedVersions() {
+  const name = readJson(path.join(cli, "package.json")).name;
+  const result = spawnTool("npm", ["view", name, "versions", "--json"], { capture: true });
+  if (result.status !== 0) return [];
+  try {
+    const parsed = JSON.parse(result.stdout || "[]");
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return [];
+  }
+}
+
 function publishToNpm() {
   // --otp is passed through when given, for a token that keeps 2FA on.
   const publishArgs = ["publish", "--access", "public"];
