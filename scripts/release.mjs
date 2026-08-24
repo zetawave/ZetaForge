@@ -64,7 +64,7 @@ async function main() {
     // that fails after the tag has been pushed. A token in ~/.npmrc that has
     // expired fails exactly like never having logged in, and the message has
     // to tell the two apart.
-    const whoami = spawnSync(executable("npm"), ["whoami"], { encoding: "utf8" });
+    const whoami = spawnTool("npm", ["whoami"], { capture: true });
     if (whoami.status !== 0) {
       fail(
         "npm rejected your credentials.",
@@ -166,8 +166,26 @@ async function main() {
 
   // ---- 6. commit, tag, push ---------------------------------------------
   step("committing and tagging");
+
+  if (git(["tag", "--list", `v${version}`]).trim()) {
+    fail(
+      `The tag v${version} already exists.`,
+      "A version is published once. Bump it, or delete the tag if the release never completed:\n" +
+        `    git tag -d v${version} && git push --delete origin v${version}`,
+    );
+  }
+
   git(["add", "-A"]);
-  git(["commit", "-m", `release: v${version}`]);
+
+  // Re-releasing the current version after a failed attempt leaves nothing to
+  // commit, and `git commit` treats that as an error. The tag is what marks the
+  // release, so an empty commit would be noise rather than a record.
+  if (git(["status", "--porcelain"]).trim()) {
+    git(["commit", "-m", `release: v${version}`]);
+  } else {
+    info("nothing to commit; tagging the current HEAD");
+  }
+
   git(["tag", "-a", `v${version}`, "-m", `ZetaForge ${version} (Host API ${hostApi})`]);
   git(["push", "origin", RELEASE_BRANCH]);
   git(["push", "origin", `v${version}`]);
@@ -213,11 +231,7 @@ function publishToNpm() {
   const publishArgs = ["publish", "--access", "public"];
   if (args.otp) publishArgs.push("--otp", String(args.otp));
 
-  const result = spawnSync(executable("npm"), publishArgs, {
-    cwd: cli,
-    encoding: "utf8",
-    stdio: "pipe",
-  });
+  const result = spawnTool("npm", publishArgs, { cwd: cli, stdio: "pipe" });
   process.stdout.write(result.stdout || "");
   if (result.status === 0) return;
 
@@ -349,31 +363,41 @@ function parseArgs(argv) {
 }
 
 /**
- * Windows shims that cannot be spawned directly, because they are `.cmd` files
- * rather than executables.
- */
-const WINDOWS_SHIMS = { npm: "npm.cmd", npx: "npx.cmd" };
-
-/**
- * The command to actually spawn, so that `shell` can stay off.
+ * Spawns a tool, on every platform, without either of the two Windows traps.
  *
- * This matters more than it looks. With `shell: true` on Windows every argument
- * is handed to cmd.exe and re-parsed, so `git commit -m "release: v4.0.0"`
- * arrives as `-m release:` plus a stray pathspec `v4.0.0`, and a tag message
- * containing parentheses is mangled differently again. Naming the shim
- * explicitly lets arguments through untouched, exactly as on Linux and macOS.
+ * Windows presents two constraints that pull in opposite directions:
+ *
+ *  * `npm` is a `.cmd` shim, and since Node 18.20 spawning one without a shell
+ *    throws `EINVAL` (CVE-2024-27980). It *needs* a shell.
+ *  * With a shell, cmd.exe re-parses every argument, so
+ *    `git commit -m "release: v4.0.0"` arrives as `-m release:` plus a stray
+ *    pathspec `v4.0.0`, and a tag message containing parentheses is mangled
+ *    differently again. It *must not* have a shell.
+ *
+ * Both are satisfied by using a shell only for the shims that require one, and
+ * quoting the arguments when we do. Everything else — git, node, gh — is a real
+ * executable and gets its arguments through untouched, exactly as on Unix.
  */
-function executable(command) {
-  if (process.platform !== "win32") return command;
-  return WINDOWS_SHIMS[command] ?? command;
+function spawnTool(command, commandArgs, options = {}) {
+  const isShim = process.platform === "win32" && /^(npm|npx|yarn|pnpm)$/.test(command);
+  const args = isShim ? commandArgs.map(quoteForShell) : commandArgs;
+
+  return spawnSync(command, args, {
+    cwd: options.cwd || root,
+    encoding: "utf8",
+    stdio: options.stdio ?? (options.capture ? "pipe" : "inherit"),
+    shell: isShim,
+  });
+}
+
+/** Quotes one argument for cmd.exe, for the few calls that go through it. */
+function quoteForShell(argument) {
+  const value = String(argument);
+  return /[\s"^&|<>()]/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
 }
 
 function run(command, commandArgs, options = {}) {
-  const result = spawnSync(executable(command), commandArgs, {
-    cwd: options.cwd || root,
-    encoding: "utf8",
-    stdio: options.capture ? "pipe" : "inherit",
-  });
+  const result = spawnTool(command, commandArgs, options);
   if (result.error) {
     fail(`${command} could not be started.`, result.error.message);
   }
@@ -396,8 +420,7 @@ function requireCommand(command, probe, message) {
 }
 
 function hasCommand(command, probe) {
-  const result = spawnSync(executable(command), probe, { encoding: "utf8" });
-  return result.status === 0;
+  return spawnTool(command, probe, { capture: true }).status === 0;
 }
 
 function readJson(file) {
