@@ -107,6 +107,24 @@ async function main() {
     if (answer.trim().toLowerCase() !== "y") fail("Cancelled.");
   }
 
+  // A release that already tagged this commit but never reached the registry
+  // has done everything except the publish. Rebuilding and re-testing it would
+  // only burn the thirty seconds a one-time password is valid for.
+  const resuming =
+    !dryRun &&
+    git(["tag", "--list", `v${version}`]).trim() &&
+    git(["rev-list", "-n1", `v${version}`]).trim() === git(["rev-parse", "HEAD"]).trim() &&
+    !publishedVersions().includes(version);
+
+  if (resuming) {
+    warn(`v${version} is already tagged on this commit and is not on npm.`);
+    warn("Resuming at the publish; nothing else is left to do.");
+    step("publishing to npm");
+    publishToNpm();
+    done(version, hostApi);
+    return;
+  }
+
   const restore = writeVersion(version);
 
   // ---- 3. build ----------------------------------------------------------
@@ -195,7 +213,7 @@ async function main() {
 
     git(["tag", "-a", `v${version}`, "-m", `ZetaForge ${version} (Host API ${hostApi})`]);
     git(["push", "origin", RELEASE_BRANCH]);
-    git(["push", "origin", `v${version}`]);
+    pushTag(version);
   }
 
   // ---- 7. publish --------------------------------------------------------
@@ -208,6 +226,10 @@ async function main() {
   // require `gh` for.
   info("the tag triggers the Release workflow, which attaches the Host APK");
 
+  done(version, hostApi);
+}
+
+function done(version) {
   console.log(`
   ✓ released ${version}
 
@@ -225,6 +247,29 @@ async function main() {
  * own output: the name can belong to somebody else, and a token can be
  * read-only.
  */
+/**
+ * Pushes the release tag, tolerating a remote that already has it.
+ *
+ * Git treats pushing a tag the remote already holds as an error even when both
+ * point at the same commit. For a release that is being retried that is not a
+ * conflict, it is the previous attempt having got this far.
+ */
+function pushTag(version) {
+  const remote = git(["ls-remote", "origin", `refs/tags/v${version}`]).trim();
+  if (remote) {
+    const local = git(["rev-list", "-n1", `v${version}`]).trim();
+    if (remote.includes(local)) {
+      info(`the remote already has v${version} on this commit`);
+      return;
+    }
+    fail(
+      `The remote has a different v${version}.`,
+      `    git push --delete origin v${version}    # only if nothing was published`,
+    );
+  }
+  git(["push", "origin", `v${version}`]);
+}
+
 /**
  * The versions npm already has, or an empty list when the package is new.
  *
