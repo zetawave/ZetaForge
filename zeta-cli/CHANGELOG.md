@@ -1,7 +1,44 @@
 # Changelog
 
-All notable changes to the `zetaforge` CLI. The major version is the Host API
+All notable changes to the `zetaforge-cli` package. The major version is the Host API
 version it targets — see [docs/versioning.md](docs/versioning.md).
+
+## 4.0.0
+
+**Host API 4.** Plugins can now be a *screen*, and the package is published to
+npm as `zetaforge-cli` rather than `zetaforge`.
+
+**Added**
+
+- **Screens.** A plugin can implement `com.zetaforge.sdk.ui.ZetaUiPlugin` and
+  return a `@Composable`, which the Host draws inside a container Activity of
+  its own. Declared with a `[ui]` block in `zetaplugin.toml`; `only = true`
+  marks a plugin that is nothing but its screen.
+- Compose is provided by the Host and compiled against as `compileOnly`, exactly
+  like the contract and the Kotlin runtime. The generated build wires it up when
+  a `[ui]` block is present.
+- A separate screen-contract version (`ui.uiApi`, `ZetaSdk.UI_API_VERSION`),
+  counted apart from the Host API because it moves with Compose. A Host
+  implementing an older one refuses to open the screen and says so, instead of
+  failing mid-frame.
+- Package format 4: the `ui` block. Older packages keep parsing unchanged.
+- The documentation site at <https://zetawave.github.io/ZetaForge/>.
+
+**Changed**
+
+- **The npm package is now `zetaforge-cli`.** The plain `zetaforge` name belongs
+  to an unrelated project. The command is still `zeta`.
+- `zeta build` verifies the boundary by reading the DEX's *class definitions*
+  rather than its string table, and refuses to package a plugin that compiles in
+  the SDK, Kotlin, coroutines or Compose. The error names the offending classes.
+- `zeta build` reports whether the package declares a screen.
+- Repository URLs now point at `zetawave/ZetaForge`, which is where the releases
+  actually are — `zeta host install` could not find them before.
+
+**Notes for plugin authors**
+
+Nothing is required of an existing plugin. A package built for Host API 1–3 runs
+unchanged on this Host; `maxHostApi` below 4 is a note, not a warning.
 
 ## 3.0.0
 
