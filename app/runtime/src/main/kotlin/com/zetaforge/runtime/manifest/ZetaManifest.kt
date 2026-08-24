@@ -41,6 +41,8 @@ data class SourceEntry(
  * * **2** - permissions may be objects (`reason`, `optional`, `minSdk`, `maxSdk`),
  *   plus `specialAccess` and `source`. Version 1 packages still parse.
  * * **3** - `settings`: the parameters the Host shows in its settings dialog.
+ * * **4** - `ui`: the plugin has a screen the Host can open. Absent means no
+ *   screen, which is what every package built before this version says.
  */
 data class ZetaManifest(
     val formatVersion: Int,
@@ -64,6 +66,8 @@ data class ZetaManifest(
     val source: List<SourceEntry>,
     /** Parameters the Host renders in the settings dialog. */
     val settings: ZetaSettingsSpec,
+    /** The screen this plugin offers, or `null` when it has none. */
+    val ui: PluginUi?,
     /** `null` while packages are unsigned; reserved for SignaturePluginVerifier. */
     val signature: PluginSignature?,
 ) {
@@ -83,6 +87,15 @@ data class ZetaManifest(
     /** True when the Host is newer than the plugin was tested against. */
     fun isUntestedOn(hostApiVersion: Int = ZetaSdk.HOST_API_VERSION): Boolean =
         hostApiVersion > maxHostApi
+
+    /** True when the Host can open a screen for this plugin. */
+    val hasUi: Boolean get() = ui != null
+
+    /**
+     * True when the screen is the whole plugin, so RUN and SCHEDULE are
+     * meaningless for it and the Host hides them.
+     */
+    val isUiOnly: Boolean get() = ui?.only == true
 
     /** Plain permission names, for the places that only need the identifiers. */
     val permissionNames: List<String> get() = permissions.map { it.name }
@@ -173,6 +186,7 @@ data class ZetaManifest(
                 hostProvidedDependencies = dependencies?.optJSONArray("hostProvided").toStringList(),
                 dex = dex,
                 settings = SettingsParser.parse(root.optJSONArray("settings")),
+                ui = PluginUi.parse(root.optJSONObject("ui")),
                 source = root.optJSONObject("code")?.optJSONArray("source")?.mapObjects { obj ->
                     SourceEntry(
                         path = obj.requireString("path"),
@@ -238,6 +252,45 @@ data class ZetaManifest(
         private val PLUGIN_ID_PATTERN = Regex("[a-zA-Z][A-Za-z0-9_]*(\\.[a-zA-Z][A-Za-z0-9_]*)+")
         private val CLASS_NAME_PATTERN = Regex("[a-zA-Z][A-Za-z0-9_]*(\\.[a-zA-Z][A-Za-z0-9_$]*)+")
         private val VERSION_PATTERN = Regex("\\d+\\.\\d+\\.\\d+([-+][A-Za-z0-9.\\-]+)?")
+    }
+}
+
+/**
+ * The screen a plugin offers, as declared in `manifest.json`.
+ *
+ * Read before a single byte of the plugin's DEX is loaded, which is the point:
+ * the Host knows whether to show OPEN, and whether it *can* open it, without
+ * running any plugin code.
+ */
+data class PluginUi(
+    /**
+     * Version of the screen contract the package was built against.
+     *
+     * The Host refuses a package that wants a newer one. That check exists
+     * because the screen ABI is Compose's ABI: without it the plugin would load
+     * happily and then die mid-frame on a `NoSuchMethodError`, which is the
+     * least debuggable failure this project can produce.
+     */
+    val uiApi: Int,
+    /** True when the plugin is only a screen: no useful RUN, no schedule. */
+    val only: Boolean,
+    /** Label of the button that opens it; blank means the Host's default. */
+    val label: String,
+) {
+    companion object {
+        fun parse(obj: JSONObject?): PluginUi? {
+            if (obj == null) return null
+            // `"ui": { "enabled": false }` is how a package says "built by a
+            // toolchain that knows about screens, but this one has none".
+            if (!obj.optBoolean("enabled", true)) return null
+            val uiApi = obj.optInt("uiApi", 1)
+            if (uiApi <= 0) throw ZetaManifestException("Invalid 'ui.uiApi': must be positive.")
+            return PluginUi(
+                uiApi = uiApi,
+                only = obj.optBoolean("only", false),
+                label = obj.optString("label", ""),
+            )
+        }
     }
 }
 

@@ -77,6 +77,22 @@ abstract class BuildZetaPluginTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val sourceFiles: ConfigurableFileCollection
     @get:Input abstract val capabilities: ListProperty<String>
+
+    /** At most one entry: the screen this plugin offers. */
+    @get:Input abstract val ui: ListProperty<UiDeclaration>
+
+    /** Screen contract version this build targets (`ZetaSdk.UI_API_VERSION`). */
+    @get:Input abstract val uiApiVersion: Property<Int>
+
+    /**
+     * Packages whose classes the plugin must never *define*, only reference.
+     *
+     * These are the types that cross the Host/plugin boundary, so there has to
+     * be exactly one copy of each: the Host's. A bundled second copy is not a
+     * warning, it is a plugin that loads and then fails with a ClassCastException
+     * from somewhere unreadable - so the build stops here instead.
+     */
+    @get:Input abstract val boundaryPackages: ListProperty<String>
     @get:Input abstract val settings: ListProperty<SettingDeclaration>
     @get:Input abstract val manifestFormatVersion: Property<Int>
     @get:Input abstract val minSdk: Property<Int>
@@ -105,6 +121,8 @@ abstract class BuildZetaPluginTask : DefaultTask() {
             }
         }
 
+        verifyBoundary(dexFiles)
+
         val entry = entryPoint.get()
         val entryHolder = dexFiles.firstOrNull { DexReader.containsType(it, entry) }
             ?: throw GradleException(
@@ -124,6 +142,29 @@ abstract class BuildZetaPluginTask : DefaultTask() {
         File(out.parentFile, out.name + ".sha256").writeText(zetaSha + "  " + out.name + "\n")
 
         report(out, dexFiles, entryHolder, zetaSha)
+    }
+
+    /**
+     * Fails the build if the plugin compiled a boundary class into its own DEX.
+     *
+     * The cause is always the same and always mechanical: a dependency declared
+     * `implementation` where it had to be `compileOnly`. The message therefore
+     * names the offending classes and the fix, because "ClassCastException:
+     * androidx.compose.runtime.Composer cannot be cast to
+     * androidx.compose.runtime.Composer" is what the developer sees otherwise.
+     */
+    private fun verifyBoundary(dexFiles: List<File>) {
+        val forbidden = boundaryPackages.get()
+        if (forbidden.isEmpty()) return
+        val offenders = dexFiles.flatMap { DexReader.definedTypesIn(it, forbidden) }
+        if (offenders.isEmpty()) return
+        throw GradleException(
+            "This plugin bundles " + offenders.size + " class(es) the Host must own: " +
+                offenders.take(8).joinToString() + (if (offenders.size > 8) ", ..." else "") +
+                ". They belong to the shared boundary (" + forbidden.joinToString() + "), so " +
+                "the Host and the plugin have to resolve them to the same objects. " +
+                "Declare those dependencies as compileOnly in this module's build file."
+        )
     }
 
     private fun findApk(): File {
@@ -171,7 +212,8 @@ abstract class BuildZetaPluginTask : DefaultTask() {
         addProperty("minSdk", minSdk.get())
         add("permissions", buildPermissions())
         add("specialAccess", buildSpecialAccess())
-        add("capabilities", capabilities.get().toJsonArray())
+        add("capabilities", buildCapabilities().toJsonArray())
+        buildUi()?.let { add("ui", it) }
         add("settings", buildSettings())
         add("dependencies", JsonObject().apply {
             add("bundled", bundledDependencies.get().toJsonArray())
@@ -206,6 +248,33 @@ abstract class BuildZetaPluginTask : DefaultTask() {
             addProperty("category", "demo")
             addProperty("icon", "")
         })
+    }
+
+    /**
+     * The `ui` block, or null when this plugin has no screen.
+     *
+     * Absent rather than `"enabled": false`, so a package with a screen and a
+     * package built before screens existed are told apart by presence alone -
+     * which is what every already published `.zeta` relies on.
+     */
+    private fun buildUi(): JsonObject? {
+        val declaration = ui.get().firstOrNull() ?: return null
+        return JsonObject().apply {
+            addProperty("enabled", true)
+            addProperty("uiApi", uiApiVersion.get())
+            addProperty("only", declaration.only)
+            if (declaration.label.isNotBlank()) addProperty("label", declaration.label)
+        }
+    }
+
+    /**
+     * `capabilities` gains "ui" automatically when a screen is declared, so the
+     * two never disagree and nobody has to remember to write both.
+     */
+    private fun buildCapabilities(): List<String> {
+        val declared = capabilities.get()
+        if (ui.get().isEmpty() || declared.contains("ui")) return declared
+        return declared + "ui"
     }
 
     /**
@@ -342,6 +411,9 @@ abstract class BuildZetaPluginTask : DefaultTask() {
                 "\n  dex files        : " + dexSummary +
                 "\n  permissions      : " + permissionSummary() +
                 "\n  settings         : " + settings.get().joinToString { it.key }.ifEmpty { "none" } +
+                "\n  screen           : " + (ui.get().firstOrNull()?.let {
+                    "yes (uiApi " + uiApiVersion.get() + (if (it.only) ", screen-only)" else ")")
+                } ?: "no") +
                 "\n  special access   : " + specialAccess.get().joinToString { it.id }.ifEmpty { "none" } +
                 "\n  source files     : " + sourceFiles.files.count { it.isFile } +
                 "\n  retrofit2 in dex : " + hasRetrofit +

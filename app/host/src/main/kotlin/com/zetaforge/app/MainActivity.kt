@@ -24,6 +24,7 @@ import com.zetaforge.app.ui.HostActions
 import com.zetaforge.app.ui.HostViewModel
 import com.zetaforge.app.ui.ReadinessItem
 import com.zetaforge.app.ui.ZetaForgeScreen
+import com.zetaforge.app.ui.screen.PluginScreenActivity
 import com.zetaforge.app.ui.theme.ZetaForgeTheme
 
 /**
@@ -141,6 +142,7 @@ class MainActivity : ComponentActivity() {
                             permissionGateway.openAppSettings()
                         },
                         onSchedule = viewModel::openSchedule,
+                        onOpenScreen = { openPluginScreen(it.id) },
                         onScheduleEdit = viewModel::editSchedule,
                         onScheduleSave = viewModel::saveSchedule,
                         onScheduleClose = viewModel::closeSchedule,
@@ -159,6 +161,25 @@ class MainActivity : ComponentActivity() {
         }
 
         handleIncomingPackage(intent)
+    }
+
+    /**
+     * Opens a plugin's screen in the Host's container Activity.
+     *
+     * Nothing about the plugin is resolved here: the container is given an id
+     * and asks the runtime, which is what keeps the Host free of any knowledge
+     * of a specific plugin.
+     */
+    private fun openPluginScreen(pluginId: String) {
+        startActivity(PluginScreenActivity.intent(this, pluginId))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // A plugin screen installs its own gateway while it is in front, since
+        // only the Activity on top can show a dialog. Whoever resumes takes it
+        // back, so a permission request never targets a dead Activity.
+        viewModel.runtime.setPermissionGateway(permissionGateway)
     }
 
     override fun onStart() {
@@ -244,6 +265,7 @@ class MainActivity : ComponentActivity() {
         if (!BuildConfig.DEBUG) return
         when (intent.action) {
             ACTION_IMPORT_FILE -> intent.getStringExtra(EXTRA_PATH)?.let(viewModel::importPluginFile)
+            ACTION_OPEN_SCREEN -> intent.getStringExtra(EXTRA_PLUGIN_ID)?.let(::openPluginScreen)
             ACTION_RUN_PLUGIN -> intent.getStringExtra(EXTRA_PLUGIN_ID)?.let { pluginId ->
                 when (intent.getStringExtra(EXTRA_SCENARIO)) {
                     SCENARIO_THROW -> viewModel.startThrowing(pluginId)
@@ -257,6 +279,7 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val ACTION_IMPORT_FILE = "com.zetaforge.app.action.IMPORT_FILE"
         const val ACTION_RUN_PLUGIN = "com.zetaforge.app.action.RUN_PLUGIN"
+        const val ACTION_OPEN_SCREEN = "com.zetaforge.app.action.OPEN_SCREEN"
         const val EXTRA_PATH = "path"
         const val EXTRA_PLUGIN_ID = "pluginId"
         const val EXTRA_SCENARIO = "scenario"

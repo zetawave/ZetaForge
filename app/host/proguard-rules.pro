@@ -38,6 +38,24 @@
 -dontwarn kotlin.**
 -dontwarn kotlinx.coroutines.**
 
+# --- Compose is part of the plugin ABI too ---------------------------------
+# The same argument as the Kotlin runtime above, for the same reason: a screen
+# plugin declares Compose `compileOnly` and draws with the Host's copy. R8 sees
+# only what the Host itself calls, so any composable, modifier or Material
+# component the Host happens not to use would be removed - and the plugin that
+# uses it dies with NoSuchMethodError in release while working in debug.
+#
+# The icons are kept as well. They are the largest single item here, and the
+# alternative is worse: a plugin referencing an icon the Host does not is a
+# release-only crash, which is the hardest kind of bug this project can ship.
+-keep class androidx.compose.runtime.** { *; }
+-keep class androidx.compose.ui.** { *; }
+-keep class androidx.compose.foundation.** { *; }
+-keep class androidx.compose.animation.** { *; }
+-keep class androidx.compose.material3.** { *; }
+-keep class androidx.compose.material.icons.** { *; }
+-dontwarn androidx.compose.**
+
 # --- Class loading ---------------------------------------------------------
 -keep class dalvik.system.** { *; }
 

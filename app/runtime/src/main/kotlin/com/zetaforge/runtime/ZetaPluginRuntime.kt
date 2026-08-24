@@ -19,6 +19,7 @@ import com.zetaforge.runtime.permission.PermissionPlan
 import com.zetaforge.runtime.schedule.ScheduleStore
 import com.zetaforge.runtime.settings.PluginSettingsStore
 import com.zetaforge.runtime.task.ZetaTaskCenter
+import com.zetaforge.runtime.ui.ZetaUiSessions
 import com.zetaforge.runtime.verify.BasicPluginVerifier
 import com.zetaforge.runtime.verify.PluginVerifier
 import com.zetaforge.sdk.PluginResult
@@ -28,6 +29,7 @@ import com.zetaforge.sdk.ZetaPlugin
 import com.zetaforge.sdk.ZetaActionResult
 import com.zetaforge.sdk.ZetaSdk
 import com.zetaforge.sdk.ZetaSettingsSpec
+import com.zetaforge.sdk.ui.ZetaUiPlugin
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +39,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.delay
 import java.io.InputStream
 
 /**
@@ -49,10 +52,24 @@ data class PluginEntry(
     val loaderStrategy: String? = null,
     /** Permission picture of the last evaluation, for the UI to render. */
     val permissionPlan: PermissionPlan? = null,
+    /** True while this plugin's screen is on display. */
+    val uiOpen: Boolean = false,
 ) {
     val id: String get() = installed.id
     val isBusy: Boolean
         get() = state == PluginState.LOADING || state == PluginState.STARTING || state == PluginState.RUNNING
+}
+
+/**
+ * What came back from asking a plugin for its screen.
+ *
+ * Every refusal carries a sentence a user can act on, because all of them are
+ * reachable by installing a perfectly valid package on the wrong Host.
+ */
+sealed class UiOpenResult {
+    /** The screen is ready; the session lasts until `closeUi` is called. */
+    data class Ready(val plugin: ZetaUiPlugin, val entry: PluginEntry) : UiOpenResult()
+    data class Refused(val reason: String, val errorCode: String) : UiOpenResult()
 }
 
 /** Outcome of an import triggered from the UI. */
@@ -184,7 +201,13 @@ class ZetaPluginRuntime(
             val previous = _plugins.value.associateBy { it.id }
             _plugins.value = installed.map { plugin ->
                 previous[plugin.id]?.copy(installed = plugin)
-                    ?: PluginEntry(plugin, PluginState.INSTALLED)
+                    ?: PluginEntry(
+                        installed = plugin,
+                        state = PluginState.INSTALLED,
+                        // A refresh can happen in a process where a screen is
+                        // already up: an alarm firing while the user is in one.
+                        uiOpen = ZetaUiSessions.isOpen(plugin.id),
+                    )
             }
         }
         // Schedules are files beside the plugins, so what is on disk is the
@@ -205,7 +228,9 @@ class ZetaPluginRuntime(
                 }
 
                 is InstallOutcome.Success -> {
-                    // Re-installing replaces the previous version: drop any loader.
+                    // Re-installing replaces the previous version: drop any
+                    // loader, and first any screen still drawing the old one.
+                    closeOpenUi(outcome.plugin.id)
                     unload(outcome.plugin.id)
                     val entry = PluginEntry(outcome.plugin, PluginState.INSTALLED)
                     mutex.withLock {
@@ -335,8 +360,128 @@ class ZetaPluginRuntime(
             result
         }
 
-    /** Drops the class loader and instance of a plugin, keeping it installed. */
+
+    // -- screens -------------------------------------------------------------
+
+    /**
+     * Loads a plugin and returns the screen it offers.
+     *
+     * Everything that can be checked without running plugin code is checked
+     * first, in the order that produces the most useful message: is it still
+     * installed, does it claim a screen at all, is that screen's contract one
+     * this Host implements, and only then is any DEX touched.
+     *
+     * On success the session is registered, which is what protects the screen
+     * from having its class loader dropped underneath it. The caller **must**
+     * call [closeUi] when the screen goes away, including when it crashed.
+     */
+    suspend fun openUi(pluginId: String): UiOpenResult = withContext(dispatcher) {
+        val entry = _plugins.value.firstOrNull { it.id == pluginId }
+            ?: return@withContext UiOpenResult.Refused(
+                "Plugin " + pluginId + " is not installed", "NOT_INSTALLED",
+            )
+
+        val ui = entry.installed.manifest.ui
+            ?: return@withContext UiOpenResult.Refused(
+                entry.installed.displayName + " does not have a screen.", "NO_UI",
+            )
+
+        if (ui.uiApi > ZetaSdk.UI_API_VERSION) {
+            return@withContext UiOpenResult.Refused(
+                "This screen needs ZetaForge screen contract " + ui.uiApi + "; this Host " +
+                    "implements " + ZetaSdk.UI_API_VERSION + ". Update ZetaForge.",
+                "UI_API_TOO_NEW",
+            )
+        }
+
+        val loaded = try {
+            load(entry)
+        } catch (t: Throwable) {
+            logger.error(SOURCE, pluginId, "Screen FAILED to load: " + t.javaClass.simpleName + ": " + t.message, t)
+            updateState(
+                pluginId, PluginState.FAILED,
+                PluginResult.Failure(
+                    message = t.message ?: t.javaClass.simpleName,
+                    errorCode = "LOAD_ERROR",
+                    cause = t,
+                ),
+            )
+            return@withContext UiOpenResult.Refused(
+                t.message ?: t.javaClass.simpleName, "LOAD_ERROR",
+            )
+        }
+
+        // The manifest is a declaration; this is the fact. A package can claim a
+        // screen and ship a class that has none - that is a build mistake, and
+        // saying so beats a ClassCastException from inside a composition.
+        val screen = loaded.instance as? ZetaUiPlugin
+            ?: return@withContext UiOpenResult.Refused(
+                entry.installed.manifest.entryPoint + " declares a screen in its manifest " +
+                    "but does not implement com.zetaforge.sdk.ui.ZetaUiPlugin.",
+                "UI_NOT_IMPLEMENTED",
+            )
+
+        ZetaUiSessions.begin(pluginId)
+        markUiOpen(pluginId, true)
+        logger.info(SOURCE, pluginId, "Screen opened")
+        UiOpenResult.Ready(screen, entry)
+    }
+
+    /**
+     * Ends a screen session.
+     *
+     * @param crashed when true the plugin is unloaded as well: a screen that
+     *   threw leaves a composition that was torn down mid-flight, and reusing
+     *   the same instance for the next open would carry that state along.
+     */
+    suspend fun closeUi(pluginId: String, crashed: Boolean = false) {
+        ZetaUiSessions.end(pluginId)
+        markUiOpen(pluginId, false)
+        logger.info(SOURCE, pluginId, if (crashed) "Screen closed after a failure" else "Screen closed")
+        if (crashed) unload(pluginId)
+    }
+
+    private fun markUiOpen(pluginId: String, open: Boolean) {
+        _plugins.value = _plugins.value.map { entry ->
+            if (entry.id != pluginId) entry else entry.copy(uiOpen = open)
+        }
+    }
+
+    /**
+     * Asks any open screen of this plugin to close and waits for it, so that
+     * whatever comes next (uninstall, replace) does not pull the files out from
+     * under a live composition.
+     *
+     * Bounded: a screen that will not go away must not be able to hang an
+     * uninstall for ever.
+     */
+    private suspend fun closeOpenUi(pluginId: String) {
+        if (!ZetaUiSessions.requestClose(pluginId)) return
+        logger.info(SOURCE, pluginId, "Waiting for the open screen to close")
+        val deadline = System.currentTimeMillis() + UI_CLOSE_TIMEOUT_MS
+        while (ZetaUiSessions.isOpen(pluginId) && System.currentTimeMillis() < deadline) {
+            delay(50)
+        }
+        if (ZetaUiSessions.isOpen(pluginId)) {
+            logger.warn(SOURCE, pluginId, "The screen did not close in time; continuing anyway")
+            ZetaUiSessions.end(pluginId)
+            markUiOpen(pluginId, false)
+        }
+    }
+
+    /**
+     * Drops the class loader and instance of a plugin, keeping it installed.
+     *
+     * Refused while the plugin's screen is open: the composition on display
+     * holds objects of classes this loader owns, and dropping it would leave
+     * them unresolvable. Callers that genuinely have to unload close the screen
+     * first (see `closeOpenUi`).
+     */
     suspend fun unload(pluginId: String) {
+        if (ZetaUiSessions.isOpen(pluginId)) {
+            logger.warn(SOURCE, pluginId, "Not unloading: the plugin's screen is open")
+            return
+        }
         val plugin = mutex.withLock { loaded.remove(pluginId) } ?: return
         runCatching { plugin.instance.onUnload() }
             .onFailure { logger.warn(SOURCE, pluginId, "onUnload threw: ${it.message}") }
@@ -346,6 +491,7 @@ class ZetaPluginRuntime(
 
     /** Removes a plugin from disk. */
     suspend fun uninstall(pluginId: String) {
+        closeOpenUi(pluginId)
         unload(pluginId)
         // Dropped before the files go: a schedule pointing at a plugin that no
         // longer exists would keep waking the device for nothing.
@@ -468,5 +614,6 @@ class ZetaPluginRuntime(
         const val SOURCE = "Runtime"
         const val SETTINGS_TIMEOUT_MS = 5_000L
         const val ACTION_TIMEOUT_MS = 30_000L
+        const val UI_CLOSE_TIMEOUT_MS = 3_000L
     }
 }

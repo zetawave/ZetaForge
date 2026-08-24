@@ -88,6 +88,31 @@ open class SettingSpec {
     }
 }
 
+/**
+ * The screen a plugin offers, declared in `zetaPlugin { ui { ... } }`.
+ *
+ * Declared rather than detected: the Host reads it before loading a single byte
+ * of the plugin's DEX, so it can show OPEN - or explain why it cannot - without
+ * running any plugin code.
+ */
+data class UiDeclaration(
+    /** True when the screen is the whole plugin: no useful RUN, no schedule. */
+    val only: Boolean = false,
+    /** Label of the button that opens it; blank means the Host's default. */
+    val label: String = "",
+) : Serializable {
+    companion object { private const val serialVersionUID = 1L }
+}
+
+/** Receiver of the `ui { }` block. */
+open class UiSpec {
+    /** True when the plugin is nothing but its screen. */
+    var only: Boolean = false
+
+    /** Overrides the label of the button that opens the screen. */
+    var label: String = ""
+}
+
 /** Mutable builder used by the `permission { }` / `specialAccess { }` DSL blocks. */
 open class PermissionSpec {
     var reason: String = ""
@@ -163,6 +188,15 @@ abstract class ZetaPluginSpec {
     abstract val capabilities: ListProperty<String>
 
     /**
+     * The screen this plugin offers, or empty when it has none.
+     *
+     * A list holding at most one element rather than a nullable property,
+     * because Gradle's lazy properties have no "explicitly unset" state and this
+     * has to survive configuration caching. See [ui].
+     */
+    abstract val uiDeclaration: ListProperty<UiDeclaration>
+
+    /**
      * Source files shipped inside the package so the user can read, in the app,
      * exactly what the plugin does before running it. Defaults to the module's
      * Kotlin and Java sources.
@@ -188,6 +222,7 @@ abstract class ZetaPluginSpec {
         specialAccess.convention(emptyList())
         capabilities.convention(emptyList())
         settings.convention(emptyList())
+        uiDeclaration.convention(emptyList())
     }
 
     // --- settings DSL -------------------------------------------------------
@@ -257,6 +292,20 @@ abstract class ZetaPluginSpec {
                 runningLabel = spec.runningLabel,
             )
         )
+    }
+
+    /**
+     * Declares that the entry point also implements
+     * `com.zetaforge.sdk.ui.ZetaUiPlugin`, so the Host can open it as a screen.
+     *
+     * ```
+     * ui { only = true }        // this plugin is a screen and nothing else
+     * ```
+     */
+    @JvmOverloads
+    fun ui(configure: Action<UiSpec>? = null) {
+        val spec = UiSpec().also { configure?.execute(it) }
+        uiDeclaration.set(listOf(UiDeclaration(only = spec.only, label = spec.label)))
     }
 
     /** Declares a permission with a reason the user will actually read. */

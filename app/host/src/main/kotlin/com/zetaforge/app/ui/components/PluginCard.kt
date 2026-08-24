@@ -19,9 +19,11 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.OpenInFull
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -69,6 +71,7 @@ fun PluginCard(
     onViewCode: () -> Unit,
     onSettings: () -> Unit,
     onSchedule: () -> Unit,
+    onOpenScreen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val accents = zetaAccents()
@@ -197,22 +200,56 @@ fun PluginCard(
             }
 
             // --- actions ------------------------------------------------------
-            Button(
-                onClick = onStart,
-                enabled = !entry.isBusy,
-                modifier = Modifier.fillMaxWidth().height(46.dp),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                if (entry.isBusy) {
-                    CircularProgressIndicator(
+            // A plugin with a screen leads with OPEN: for a screen-only one it
+            // is the only thing that means anything, and for a plugin that is
+            // both it is the action a person came to the card for.
+            if (manifest.hasUi) {
+                Button(
+                    onClick = onOpenScreen,
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Icon(
+                        Icons.Outlined.OpenInFull,
+                        contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.action_running).uppercase())
-                } else {
-                    Text(stringResource(R.string.action_start).uppercase())
+                    Text(
+                        manifest.ui?.label?.takeIf { it.isNotBlank() }
+                            ?: stringResource(R.string.action_open).uppercase()
+                    )
+                }
+            }
+
+            // RUN is hidden for a screen-only plugin: its `execute` exists
+            // because the contract requires one, and pressing it would do
+            // nothing a user could want.
+            if (!manifest.isUiOnly) {
+                Button(
+                    onClick = onStart,
+                    enabled = !entry.isBusy,
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = if (manifest.hasUi) {
+                        ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary,
+                        )
+                    } else {
+                        ButtonDefaults.buttonColors()
+                    },
+                ) {
+                    if (entry.isBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.action_running).uppercase())
+                    } else {
+                        Text(stringResource(R.string.action_start).uppercase())
+                    }
                 }
             }
 
@@ -228,14 +265,18 @@ fun PluginCard(
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.action_settings).uppercase(), maxLines = 1)
                         }
-                        OutlinedButton(
-                            onClick = onSchedule,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                        ) {
-                            Icon(Icons.Outlined.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.action_schedule).uppercase(), maxLines = 1)
+                        // Scheduling something that only exists while someone is
+                        // looking at it is meaningless, so it is not offered.
+                        if (!manifest.isUiOnly) {
+                            OutlinedButton(
+                                onClick = onSchedule,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                            ) {
+                                Icon(Icons.Outlined.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.action_schedule).uppercase(), maxLines = 1)
+                            }
                         }
                     }
 

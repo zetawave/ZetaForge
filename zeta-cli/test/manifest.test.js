@@ -8,6 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadProject } from "../src/project/manifest.js";
+import { HOST_API_VERSION, UI_API_VERSION } from "../src/config.js";
 
 /** Asserts on the whole error: a hint that goes missing is a regression. */
 function throwsWith(fn, pattern) {
@@ -41,7 +42,9 @@ test("loads a minimal descriptor and fills in the defaults", () => {
   const loaded = loadProject(project(VALID));
   assert.equal(loaded.plugin.id, "com.example.demo");
   assert.equal(loaded.plugin.minSdk, 26);
-  assert.equal(loaded.plugin.minHostApi, 3);
+  // Pinned to the constant, not to a literal: the CLI's major version *is*
+  // the Host API version, so a bump must not need a test edit.
+  assert.equal(loaded.plugin.minHostApi, HOST_API_VERSION);
   assert.deepEqual(loaded.permissions, []);
   assert.deepEqual(loaded.settings, []);
 });
@@ -122,4 +125,27 @@ test("explains itself when there is no descriptor at all", () => {
 test("points at the file when the TOML is malformed", () => {
   const dir = project("[plugin\nid = ");
   assert.throws(() => loadProject(dir), /not valid TOML/);
+});
+
+test("a descriptor without a [ui] block declares no screen", () => {
+  const loaded = loadProject(project(VALID));
+  assert.equal(loaded.ui, null);
+  assert.deepEqual(loaded.capabilities, []);
+});
+
+const UI_ONLY = ["", "[ui]", "only = true", ""].join("\n");
+const UI_FUTURE = ["", "[ui]", "uiApi = 99", ""].join("\n");
+
+test("a [ui] block becomes a screen declaration and the ui capability", () => {
+  const loaded = loadProject(project(VALID + UI_ONLY));
+  assert.equal(loaded.ui.enabled, true);
+  assert.equal(loaded.ui.only, true);
+  assert.equal(loaded.ui.uiApi, UI_API_VERSION);
+  // Declared once in the [ui] block, mirrored into capabilities by the loader,
+  // so the two can never disagree.
+  assert.deepEqual(loaded.capabilities, ["ui"]);
+});
+
+test("refuses a screen contract this CLI cannot build", () => {
+  throwsWith(() => loadProject(project(VALID + UI_FUTURE)), /screen contract 99/);
 });

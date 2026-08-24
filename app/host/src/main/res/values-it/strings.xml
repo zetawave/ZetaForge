@@ -314,4 +314,16 @@
     <string name="about_host_api">Host API %1$d · formato pacchetto %2$d</string>
     <string name="about_trust_title">Il confine di fiducia</string>
     <string name="about_trust_body">Un plugin gira dentro questa app con i permessi di questa app. Fra i due non c’è isolamento: importa solo ciò di cui ti fidi, e leggi il codice — viaggia dentro ogni pacchetto.</string>
+    <!-- Schermate dei plugin -->
+    <string name="action_open">Apri</string>
+    <string name="screen_badge">Schermata di un plugin ZetaForge</string>
+    <string name="screen_badge_short">PLUGIN</string>
+    <string name="screen_close">Chiudi</string>
+    <string name="screen_unavailable_title">Questa schermata non si può aprire</string>
+    <string name="screen_error_no_plugin">La richiesta non indica nessun plugin.</string>
+    <string name="screen_crashed_title">La schermata del plugin si è fermata</string>
+    <string name="screen_crashed_body">%1$s ha sollevato un\'eccezione: la schermata è stata chiusa e il plugin scaricato. ZetaForge non ne è stata toccata.</string>
+    <string name="screen_permission_intro">A %1$s servono questi permessi:</string>
+    <string name="screen_special_access_body">Va attivato nelle impostazioni di Android.</string>
 </resources>
+

@@ -92,6 +92,10 @@ object SharedContract {
         "com.zetaforge.sdk",
         "kotlin",
         "kotlinx.coroutines",
+        // Screens are drawn with the Host's Compose. It is a boundary type for
+        // exactly the same reason the SDK is: the Host builds the composition
+        // and the plugin adds to it, so both halves must be the same objects.
+        "androidx.compose",
     )
 
     /**
@@ -111,5 +115,10 @@ object SharedContract {
         "com.zetaforge.sdk.ZetaPlugin",
         "com.zetaforge.sdk.PluginResult",
         "kotlin.coroutines.Continuation",
+        // The two Compose types every compiled composable mentions: if a plugin
+        // bundled Compose, these are what would differ, and the screen would
+        // die with a ClassCastException nobody could read.
+        "androidx.compose.runtime.Composer",
+        "androidx.compose.runtime.internal.ComposableLambda",
     )
 }

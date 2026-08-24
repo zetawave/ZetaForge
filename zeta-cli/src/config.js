@@ -60,4 +60,11 @@ export const PROJECT = {
   workDir: ".zeta",
 };
 
-export const MANIFEST_FORMAT_VERSION = 3;
+export const MANIFEST_FORMAT_VERSION = 4;
+
+/**
+ * Version of the *screen* contract a plugin with a `[ui]` block is built
+ * against. Separate from the Host API because it moves with Compose: see
+ * com.zetaforge.sdk.ZetaSdk.UI_API_VERSION.
+ */
+export const UI_API_VERSION = 1;

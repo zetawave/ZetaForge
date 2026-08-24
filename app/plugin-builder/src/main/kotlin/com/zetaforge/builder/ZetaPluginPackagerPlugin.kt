@@ -56,6 +56,19 @@ class ZetaPluginPackagerPlugin : Plugin<Project> {
                     sourceFiles.from(spec.sourceFiles)
                     capabilities.set(spec.capabilities)
                     settings.set(spec.settings)
+                    ui.set(spec.uiDeclaration)
+                    uiApiVersion.convention(1)
+                    // The boundary, by default. A module can widen it but not
+                    // silently narrow it: every entry here is a class the Host
+                    // has to own for the plugin to work at all.
+                    boundaryPackages.convention(
+                        listOf(
+                            "com.zetaforge.sdk",
+                            "kotlin.",
+                            "kotlinx.coroutines.",
+                            "androidx.compose.",
+                        )
+                    )
                     manifestFormatVersion.convention(2)
                     minSdk.convention(26)
                     bundledDependencies.convention(emptyList())

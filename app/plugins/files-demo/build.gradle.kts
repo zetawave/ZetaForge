@@ -65,7 +65,7 @@ zetaPlugin {
     )
     entryPoint.set("com.zetaforge.plugins.filesdemo.FilesDemoPlugin")
     minHostApi.set(1)
-    maxHostApi.set(2)
+    maxHostApi.set(4)
 
     // API 33+ : granular media permission.
     permission("android.permission.READ_MEDIA_IMAGES") {

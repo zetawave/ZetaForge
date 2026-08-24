@@ -319,4 +319,16 @@
     <string name="about_host_api">Host API %1$d · package format %2$d</string>
     <string name="about_trust_title">The trust boundary</string>
     <string name="about_trust_body">A plugin runs inside this app with this app’s permissions. There is no sandbox between them: import only what you trust, and read the source — it ships inside every package.</string>
+    <!-- Plugin screens -->
+    <string name="action_open">Open</string>
+    <string name="screen_badge">ZetaForge plugin screen</string>
+    <string name="screen_badge_short">PLUGIN</string>
+    <string name="screen_close">Close</string>
+    <string name="screen_unavailable_title">This screen cannot be opened</string>
+    <string name="screen_error_no_plugin">No plugin was named in the request.</string>
+    <string name="screen_crashed_title">The plugin screen stopped</string>
+    <string name="screen_crashed_body">%1$s threw an exception, so its screen was closed and the plugin unloaded. ZetaForge itself is unaffected.</string>
+    <string name="screen_permission_intro">%1$s needs these to work:</string>
+    <string name="screen_special_access_body">This has to be switched on in Android Settings.</string>
 </resources>
+

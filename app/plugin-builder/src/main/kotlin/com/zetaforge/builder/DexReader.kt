@@ -46,6 +46,41 @@ internal object DexReader {
         return readStrings(file).contains(descriptor)
     }
 
+    /**
+     * The types this DEX **defines**, as `Lfoo/Bar;` descriptors.
+     *
+     * Different from [readStrings] in the way that matters for the boundary
+     * check: the string table also holds every type the code merely *mentions*,
+     * and a plugin is supposed to mention the contract constantly. Only a
+     * definition means the class was compiled in, which is the mistake worth
+     * failing a build over.
+     */
+    fun definedTypes(file: File): List<String> {
+        val bytes = file.readBytes()
+        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        val strings = readStrings(file)
+        val typeIdsOff = buf.getInt(68)
+        val classDefsSize = buf.getInt(96)
+        val classDefsOff = buf.getInt(100)
+        val result = ArrayList<String>(classDefsSize)
+        for (i in 0 until classDefsSize) {
+            // class_def_item is 32 bytes and opens with class_idx, an index into
+            // type_ids; each type_id is one index into the string table.
+            val classIdx = buf.getInt(classDefsOff + i * 32)
+            val descriptorIdx = buf.getInt(typeIdsOff + classIdx * 4)
+            strings.getOrNull(descriptorIdx)?.let { result += it }
+        }
+        return result
+    }
+
+    /** Types defined here whose name starts with any of [packagePrefixes]. */
+    fun definedTypesIn(file: File, packagePrefixes: List<String>): List<String> {
+        val descriptors = packagePrefixes.map { "L" + it.replace('.', '/') }
+        return definedTypes(file)
+            .filter { type -> descriptors.any { type.startsWith(it) } }
+            .map { it.removePrefix("L").removeSuffix(";").replace('/', '.') }
+    }
+
     fun containsAnyTypeInPackage(file: File, packagePrefix: String): Boolean {
         val prefix = "L" + packagePrefix.replace('.', '/')
         return readStrings(file).any { it.startsWith(prefix) }

@@ -6,6 +6,8 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -173,19 +175,31 @@ val CodeStyle = TextStyle(
     lineHeight = 19.sp,
 )
 
+/**
+ * Whether the *theme in force* is dark, as opposed to whether the system is.
+ *
+ * The two differ whenever the user has picked a theme in the app's settings,
+ * and anything reading `isSystemInDarkTheme()` directly gets the wrong answer -
+ * visibly so on a plugin screen, which is drawn by several compositions that
+ * would each decide separately.
+ */
+val LocalZetaDarkTheme = staticCompositionLocalOf { false }
+
 @Composable
 fun ZetaForgeTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = ZetaTypography,
-        content = content,
-    )
+    CompositionLocalProvider(LocalZetaDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            typography = ZetaTypography,
+            content = content,
+        )
+    }
 }
 
-/** Accent colours for the current theme. */
+/** Accent colours for the theme actually in force. */
 @Composable
-fun zetaAccents(darkTheme: Boolean = isSystemInDarkTheme()): ZetaAccentColors =
+fun zetaAccents(darkTheme: Boolean = LocalZetaDarkTheme.current): ZetaAccentColors =
     if (darkTheme) zetaAccentsDark else zetaAccentsLight

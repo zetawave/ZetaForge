@@ -1,6 +1,10 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    // The screen contract declares a @Composable function, so the Compose
+    // compiler has to run here too: without it `Content` would be compiled as a
+    // plain method and no plugin could ever implement it correctly.
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -26,9 +30,13 @@ kotlin {
 
 dependencies {
     // The SDK is the only artifact shared between Host and plugins, so it must
-    // stay as small as possible: Kotlin stdlib + coroutines, nothing else.
+    // stay as small as possible: Kotlin stdlib, coroutines and the Compose
+    // runtime, and all three as compileOnly - the Host provides them, the SDK
+    // jar carries none of them.
     compileOnly(libs.kotlin.stdlib)
     compileOnly(libs.kotlinx.coroutines.core)
+    compileOnly(platform(libs.compose.bom))
+    compileOnly(libs.compose.runtime)
 }
 
 /**

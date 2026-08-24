@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Only present because the module is built with the Android application
+    plugin; this APK is never installed and this manifest never reaches a
+    device. The plugin declares nothing here on purpose: it is a screen, and a
+    screen needs no permission, no component and no resource of its own - the
+    Host's container Activity is the component, and the .zeta manifest produced
+    from build.gradle.kts is the authoritative declaration.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="Calculator Plugin" />
+</manifest>

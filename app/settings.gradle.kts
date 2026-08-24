@@ -25,6 +25,7 @@ include(":host")
 // --- Plugins (built completely separately from the Host) --------------------
 include(":plugins:retrofit-demo")
 include(":plugins:files-demo")
+include(":plugins:calculator")
 
 // --- Private plugins ---------------------------------------------------------
 // Anything under plugins-local/ is picked up automatically and is git-ignored,

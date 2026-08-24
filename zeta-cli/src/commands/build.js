@@ -45,6 +45,9 @@ export async function run(options) {
     ["classes", `${result.classes}`],
     ["entry point", project.plugin.entryPoint, "ok"],
     ["settings", result.manifest.settings.length ? result.manifest.settings.map((s) => s.key).join(", ") : "none"],
+    ["screen", result.manifest.ui
+      ? `yes (uiApi ${result.manifest.ui.uiApi}${result.manifest.ui.only ? ", screen-only" : ""})`
+      : "no"],
     ["permissions", result.manifest.permissions.length
       ? result.manifest.permissions.map((p) => p.name.split(".").pop()).join(", ")
       : "none"],

@@ -95,6 +95,66 @@ class ZetaManifestTest {
         e
     }
 
+    // --- screens ------------------------------------------------------------
+
+    @Test
+    fun `a manifest without a ui block has no screen`() {
+        val manifest = ZetaManifest.parse(validManifest())
+
+        // Every package built before screens existed lands here, which is the
+        // property that keeps them all loadable.
+        assertNull(manifest.ui)
+        assertFalse(manifest.hasUi)
+        assertFalse(manifest.isUiOnly)
+    }
+
+    @Test
+    fun `parses a screen declaration`() {
+        val json = validManifest().replace(
+            "\"formatVersion\": 1,",
+            "\"formatVersion\": 4, \"ui\": { \"enabled\": true, \"uiApi\": 1, \"only\": true, \"label\": \"Calculate\" },",
+        )
+        val manifest = ZetaManifest.parse(json)
+
+        assertTrue(manifest.hasUi)
+        assertTrue(manifest.isUiOnly)
+        assertEquals(1, manifest.ui!!.uiApi)
+        assertEquals("Calculate", manifest.ui!!.label)
+    }
+
+    @Test
+    fun `a disabled ui block means no screen`() {
+        val json = validManifest().replace(
+            "\"formatVersion\": 1,",
+            "\"formatVersion\": 4, \"ui\": { \"enabled\": false },",
+        )
+
+        // How a toolchain that knows about screens says "this one has none".
+        assertNull(ZetaManifest.parse(json).ui)
+    }
+
+    @Test
+    fun `rejects a nonsensical ui api version`() {
+        val json = validManifest().replace(
+            "\"formatVersion\": 1,",
+            "\"formatVersion\": 4, \"ui\": { \"enabled\": true, \"uiApi\": 0 },",
+        )
+        val error = assertThrows { ZetaManifest.parse(json) }
+        assertTrue(error.message!!.contains("ui.uiApi"))
+    }
+
+    @Test
+    fun `a screen built for a newer contract is still readable`() {
+        val json = validManifest().replace(
+            "\"formatVersion\": 1,",
+            "\"formatVersion\": 4, \"ui\": { \"enabled\": true, \"uiApi\": 99 },",
+        )
+
+        // Parsing must succeed so the Host can *explain* the refusal; deciding
+        // it cannot be opened belongs to the runtime, not to the parser.
+        assertEquals(99, ZetaManifest.parse(json).ui!!.uiApi)
+    }
+
     private fun validManifest(): String = """
         {
           "formatVersion": 1,

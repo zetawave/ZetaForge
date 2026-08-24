@@ -35,6 +35,12 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.core.ktx)
 
+    // The screen contract mentions @Composable, so resolving ZetaUiPlugin needs
+    // the annotation on the classpath. Compile-time only: the runtime draws
+    // nothing itself, it just recognises a plugin that can.
+    compileOnly(platform(libs.compose.bom))
+    compileOnly(libs.compose.runtime)
+
     // org.json ships as stubs in the Android SDK; unit tests need a real one.
     testImplementation(libs.junit)
     testImplementation(libs.json)

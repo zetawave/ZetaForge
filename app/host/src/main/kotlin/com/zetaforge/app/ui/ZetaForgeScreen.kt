@@ -118,6 +118,7 @@ data class HostActions(
     val onDismissBlocked: () -> Unit,
     val onOpenAppSettings: () -> Unit,
     val onSchedule: (PluginEntry) -> Unit,
+    val onOpenScreen: (PluginEntry) -> Unit,
     val onScheduleEdit: ((Schedule) -> Schedule) -> Unit,
     val onScheduleSave: () -> Unit,
     val onScheduleClose: () -> Unit,
@@ -385,6 +386,7 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
                     onViewCode = { actions.onViewCode(entry) },
                     onSettings = { actions.onSettings(entry) },
                     onSchedule = { actions.onSchedule(entry) },
+                    onOpenScreen = { actions.onOpenScreen(entry) },
                 )
             }
         }

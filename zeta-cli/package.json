@@ -1,6 +1,6 @@
 {
   "name": "zetaforge",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "Create, build and test ZetaForge plugins: real Kotlin, real libraries, packaged as a single .zeta file.",
   "keywords": [
     "android",

@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { ZetaError } from "../errors.js";
-import { HOST_API_VERSION, MANIFEST_FORMAT_VERSION, PROJECT } from "../config.js";
+import { HOST_API_VERSION, MANIFEST_FORMAT_VERSION, UI_API_VERSION, PROJECT } from "../config.js";
 
 const SETTING_TYPES = [
   "switch", "number", "decimal", "text", "choice", "multiChoice", "folder", "action",
@@ -228,6 +228,29 @@ function validate(raw, file) {
     return { name, coordinate, excludeKotlin: value.excludeKotlin !== false };
   });
 
+  // A screen is declared, never detected: the Host reads this before loading
+  // any of the plugin's code, which is what lets it show (or refuse) OPEN
+  // without running a single line of it.
+  const ui = raw.ui
+    ? {
+        enabled: raw.ui.enabled !== false,
+        uiApi: raw.ui.uiApi ?? UI_API_VERSION,
+        only: raw.ui.only === true,
+        label: raw.ui.label || "",
+      }
+    : null;
+
+  if (ui && ui.uiApi > UI_API_VERSION) {
+    throw new ZetaError(
+      `This plugin targets screen contract ${ui.uiApi}, but this CLI builds for ${UI_API_VERSION}.`,
+      {
+        where: file,
+        hint: "Install a newer CLI, or lower uiApi in the [ui] block.",
+        docs: "versioning.md",
+      },
+    );
+  }
+
   return {
     plugin: {
       id,
@@ -247,8 +270,16 @@ function validate(raw, file) {
     specialAccess,
     settings,
     dependencies,
-    capabilities: raw.plugin?.capabilities || [],
+    // "ui" is added for the plugin, so the declaration and the capability
+    // list can never disagree.
+    capabilities: withUiCapability(raw.plugin?.capabilities || [], ui),
+    ui,
   };
+}
+
+function withUiCapability(capabilities, ui) {
+  if (!ui || !ui.enabled || capabilities.includes("ui")) return capabilities;
+  return [...capabilities, "ui"];
 }
 
 function defaultFor(type) {
@@ -285,6 +316,16 @@ export function buildManifest(project, code) {
     specialAccess: project.specialAccess,
     capabilities: project.capabilities,
     settings: project.settings,
+    ...(project.ui && project.ui.enabled
+      ? {
+          ui: {
+            enabled: true,
+            uiApi: project.ui.uiApi,
+            only: project.ui.only,
+            ...(project.ui.label ? { label: project.ui.label } : {}),
+          },
+        }
+      : {}),
     dependencies: {
       bundled: project.dependencies.map((d) => d.coordinate),
       hostProvided: [
