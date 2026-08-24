@@ -80,8 +80,8 @@ license     = "Apache-2.0"   # your plugin's licence, not ZetaForge's
 description = "One paragraph, written for a human."
 entryPoint  = "com.example.weather.WeatherPlugin"
 minSdk      = 26                      # oldest Android you support
-minHostApi  = 3                       # hard requirement
-maxHostApi  = 3                       # tested up to; newer only warns
+minHostApi  = 4                       # hard requirement
+maxHostApi  = 4                       # tested up to; newer only warns
 category    = "utility"
 ```
 
@@ -92,6 +92,66 @@ keeps its data and stays installed.
 `entryPoint` must name a class that really exists in the compiled code: `zeta
 build` opens the DEX and checks, and suggests the closest match when it is
 wrong.
+
+## A plugin that is a screen
+
+A plugin does not have to be a job. It can be something the user *opens*: a
+screen, drawn by the plugin and rendered by the Host.
+
+```toml
+[ui]
+only = true        # this plugin is a screen and nothing else
+# label = "Open"   # optional: the text on the button that opens it
+```
+
+```kotlin
+class CalculatorPlugin : ZetaUiPlugin {
+    override val id = "com.example.calculator"
+    override val name = "Calculator"
+    override val version = "1.0.0"
+
+    @Composable
+    override fun Content(host: ZetaUiHost) { /* your screen */ }
+}
+```
+
+`ZetaUiPlugin` extends `ZetaPlugin`, so a screen still has an id, permissions,
+settings and an `execute` — the default one just says "this is a screen". With
+`only = true` the Host shows **OPEN** and hides RUN and SCHEDULE, because
+scheduling something that exists only while a person is looking at it means
+nothing.
+
+### Why there is no Activity
+
+Android resolves components from the manifest of an installed APK, frozen at
+install time, so an `Activity` in a plugin's DEX can never be started — the same
+wall as a permission the Host does not declare. The Host declares one container
+Activity and asks the plugin for *content* instead. This is also why a screen
+still needs no resources: Compose has none.
+
+### Compose belongs to the Host
+
+Compose is a shared class, exactly like the contract and the Kotlin runtime: the
+Host builds the composition and your plugin adds to it, so both halves must be
+the same classes. The CLI compiles a `[ui]` plugin against the Host's Compose
+and packages none of it. Do not add Compose to `[dependencies]` — `zeta build`
+refuses a package that carries it.
+
+The screen contract has its own version, `ui.uiApi`, separate from the Host API
+because it moves with Compose rather than with the SDK. A Host that implements an
+older one refuses to open the screen and says so, instead of failing mid-frame.
+
+### What a screen gets
+
+`ZetaUiHost`, not the Activity: `settings` (the same `Bundle` `execute`
+receives), `scope` for coroutines, `ensurePermissions()`, `message()` and
+`setSubtitle()` for lines the Host renders, and `close()`.
+
+### What a screen cannot keep
+
+Not `rememberSaveable`, for your own types. Saved instance state is restored with
+the *Host's* class loader, which has never heard of your classes. Rotation is
+handled for you; anything that must outlive the process, persist yourself.
 
 ## What a plugin can do
 
@@ -106,8 +166,8 @@ Any JVM or Android library, compiled into the plugin's own DEX. See
 
 | | |
 |---|---|
-| **Resources** | no `R` class, no layouts, no XML. Ship data in `assets/` and read it from the package. |
-| **Manifest components** | an Activity or Service declared by a plugin is ignored: the Host's manifest is fixed when the app is installed. |
+| **Resources** | no `R` class, no layouts, no XML. Ship data in `assets/` and read it from the package — and for a user interface, write a screen: Compose needs no resources. |
+| **Manifest components** | an Activity or Service declared by a plugin is ignored: the Host's manifest is fixed when the app is installed. A screen is supplied as a composable instead. |
 | **Native `.so` libraries** | the format reserves `libs/` for them, but nothing loads them yet. |
 | **Permissions the Host does not declare** | Android refuses them silently. See [permissions.md](permissions.md). |
 
@@ -118,7 +178,10 @@ permissions**. There is no sandbox between them. This is what makes the system
 useful — a plugin is as capable as the app itself — and it is also why importing
 one is as consequential as installing an app.
 
-Three classes must be *shared*, never copied: the ZetaForge contract, the Kotlin
-standard library, and coroutines. If a plugin carried its own copy, the Host
-could not even cast it to `ZetaPlugin`, because the two `ZetaPlugin` classes
-would be different types. `zeta build` refuses to package a plugin that does.
+Four things must be *shared*, never copied: the ZetaForge contract, the Kotlin
+standard library, coroutines, and — for a plugin with a screen — Compose. If a
+plugin carried its own copy, the Host could not even cast it to `ZetaPlugin`,
+because the two `ZetaPlugin` classes would be different types; a second Compose
+fails the same way, one frame later and far less legibly. `zeta build` refuses to
+package a plugin that does, by reading the class definitions in the produced DEX
+rather than trusting the build file.

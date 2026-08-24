@@ -62,11 +62,6 @@ dependencies {
     compileOnly(libs.compose.ui.graphics)
     compileOnly(libs.compose.foundation)
     compileOnly(libs.compose.material3)
-
-    // The engine is plain Kotlin with no Android in it, which is the point of
-    // keeping it apart from the screen: it is testable on the JVM, off device.
-    testImplementation(libs.junit)
-    testImplementation(libs.kotlin.stdlib)
 }
 
 zetaPlugin {

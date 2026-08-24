@@ -15,11 +15,12 @@
 
 | Module | Type | Contains | Depends on |
 |---|---|---|---|
-| `plugin-api` | Android library | `ZetaPlugin`, `PluginResult`, `PluginState`, `ZetaLog`, `ZetaSdk.HOST_API_VERSION` | nothing (stdlib/coroutines are `compileOnly`) |
+| `plugin-api` | Android library | `ZetaPlugin`, `PluginResult`, `PluginState`, `ZetaLog`, `ZetaSdk.HOST_API_VERSION`, and `ui.ZetaUiPlugin` / `ui.ZetaUiHost` for plugins that are a screen | nothing (stdlib, coroutines *and Compose* are `compileOnly`) |
 | `runtime` | Android library | manifest parsing, package reading, verification, installation, class loading, lifecycle, execution, logging | `plugin-api` |
-| `host` | Android app | Compose UI + `HostViewModel` only | `runtime` (and transitively `plugin-api`) |
+| `host` | Android app | Compose UI + `HostViewModel`, plus `PluginScreenActivity`: the one container every plugin screen is drawn inside | `runtime` (and transitively `plugin-api`) |
 | `plugins/retrofit-demo` | Android app (never installed) | reference plugin with external dependencies | `plugin-api` **compileOnly** |
 | `plugins/files-demo` | Android app (never installed) | reference plugin needing a run-time permission | `plugin-api` **compileOnly** |
+| `plugins/calculator` | Android app (never installed) | reference plugin that is a *screen*: a calculator, no permissions, no I/O | `plugin-api` **and Compose**, both **compileOnly** |
 | `plugin-builder` | included Gradle build | `com.zetaforge.zeta-plugin` (packaging), `com.zetaforge.host-permissions` (manifest injection), `.zeta` writer, DEX reader | AGP API |
 
 Rules enforced by the build:
@@ -28,8 +29,10 @@ Rules enforced by the build:
   compiles against `plugin-api`;
 * the Host never references any concrete plugin: it only knows ids, manifests
   and the `ZetaPlugin` interface;
-* `plugin-api`, Kotlin stdlib and coroutines are `compileOnly` on the plugin side,
-  so exactly one copy of every boundary type exists at runtime.
+* `plugin-api`, Kotlin stdlib, coroutines **and Compose** are `compileOnly` on
+  the plugin side, so exactly one copy of every boundary type exists at runtime.
+  Compose joined that list when screens did, for the same reason as the rest: the
+  Host builds the composition and the plugin adds to it.
 
 ## 2. The `.zeta` package
 
@@ -51,8 +54,12 @@ retrofit-demo.zeta                (ZIP)
 
 Format versions: **1** had plain-string permissions; **2** adds structured
 permissions (`reason`, `optional`, `minSdk`, `maxSdk`), `specialAccess` and
-bundled sources. Version 1 packages still parse - the runtime accepts both
-shapes, which is the whole point of versioning the format.
+bundled sources; **3** adds declared `settings`; **4** adds the `ui` block —
+whether the plugin has a screen, which screen-contract version it was built
+against, and whether the screen is all it is. Older packages still parse - the
+runtime accepts every shape, which is the whole point of versioning the format.
+The absence of `ui` is how every package built before screens existed says it
+has none.
 
 ## 3. How the plugin is built
 
@@ -71,6 +78,15 @@ defined inside, writes the manifest with per-DEX SHA-256 and seals the archive.
 produced artifact: 548 classes are defined in `classes.dex` (OkHttp, Okio,
 Retrofit and the plugin itself); `com.zetaforge.sdk.*`, `kotlin.*` and
 `kotlinx.coroutines.*` appear only as *references*, never as definitions.
+
+Since screens exist that is no longer a claim, it is a build step.
+`BuildZetaPluginTask` parses the produced DEX's `class_defs` table — not its
+string table, which legitimately mentions the boundary constantly — and fails the
+build if the plugin *defines* anything under `com.zetaforge.sdk`, `kotlin.`,
+`kotlinx.coroutines.` or `androidx.compose.`. The message names the offending
+classes and the fix, because the alternative a developer would otherwise see is
+`ClassCastException: androidx.compose.runtime.Composer cannot be cast to
+androidx.compose.runtime.Composer`.
 
 ## 4. Import and installation
 
@@ -139,6 +155,69 @@ Real isolation would need a separate process (`android:process=":isolated"`) wit
 an IPC contract, which is out of scope for the PoC but is why `PluginVerifier`
 and the `signature` block exist already.
 
+## 7b. Screens
+
+A plugin can also *be* a screen, which is the third shape after "a job you run"
+and "a job that runs itself".
+
+### Why the plugin supplies content and not a component
+
+Android resolves components through the manifest of an installed APK, frozen at
+install time. A plugin's `Activity` is therefore unstartable, exactly as a
+plugin's permission is ungrantable (§9) - the same wall, in a different place.
+So the Host declares one container Activity and the plugin implements
+
+```kotlin
+@Composable fun Content(host: ZetaUiHost)
+```
+
+Compose is the reason this costs nothing structurally: it needs no resources, so
+the `.zeta` format, the installer and the class loader are all unchanged. The
+package that draws a screen is the package that ran a batch job.
+
+### Where the failures go
+
+`Runtime.execute` contains failures with a single `try` around a single suspend
+call. A screen cannot: its code is re-entered by the framework from four
+directions, and any of them unwinds into `ViewRootImpl` and kills the process.
+
+```
+touch / key / measure / layout / draw   ──▶  PluginCrashGuard (FrameLayout)   ─┐
+composition / recomposition / effects   ──▶  the plugin's own Recomposer,      ├─▶ error screen
+                                             with its own exception handler   ─┘   + unload
+```
+
+The plugin's composition deliberately does **not** share the window recomposer:
+that one propagates, and propagating is what kills the Host. Nothing is repaired
+in place — after an exception the slot table describes a tree that was never
+finished — so the composition is torn down and the next open starts fresh.
+
+### Where identity goes
+
+The bar naming the plugin is a *separate composition in a separate view* above
+the plugin's own. A screen runs with the Host's UID and permissions, so a
+convincing fake of the Host's UI is the cheapest attack it has; the plugin owns
+the subtitle and nothing else. It can still open a `Dialog` over the window,
+which Android gives no way to prevent.
+
+### Where the lifecycle goes
+
+`ZetaUiSessions` is process-wide state, like `ZetaTaskCenter` and for the same
+reason: the Activity is created by Android and cannot be handed a reference to
+anything. A screen being open makes two previously free operations expensive:
+
+* `unload` is refused — the composition holds objects of classes that loader owns;
+* `uninstall` and re-import ask the screen to close and wait for it, bounded, so
+  a stuck screen cannot hang an uninstall for ever.
+
+### Two contracts, two version numbers
+
+`ZetaSdk.UI_API_VERSION` is counted separately from `HOST_API_VERSION` because
+the screen ABI is Compose's ABI: a Host that upgrades Compose can break an
+already compiled screen without touching the SDK. The manifest records
+`ui.uiApi`; a Host implementing an older screen contract refuses with a sentence
+instead of a `NoSuchMethodError` on the first frame.
+
 ## 8. Extension points already in place
 
 | Seam | Today | Next |
@@ -147,7 +226,8 @@ and the `signature` block exist already.
 | `manifest.signature` | always `null` | certificate + signature over the DEX hashes |
 | `ZetaLogger.persister` | in-memory ring buffer | file / Room persistence |
 | `PluginState` | full lifecycle modelled | scheduler, background execution, updates |
-| `capabilities[]` | recorded and displayed | capability-based Host API surface |
+| `ZetaUiHost` | screen, settings, permissions, messages | richer Host services for screens, and a durable place to keep screen state |
+| `capabilities[]` | recorded and displayed; `ui` is added automatically when a screen is declared | capability-based Host API surface |
 | `libs/` in the package | reserved, empty | native `.so` support |
 
 

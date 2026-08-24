@@ -81,11 +81,19 @@ The Host extracts the plugin's DEX, loads it with a `DelegateLastClassLoader` so
 the plugin's own libraries win over the app's, finds the entry point class by
 name, instantiates it and calls `execute`.
 
-Three things must be *shared* rather than duplicated — the contract, the Kotlin
-standard library, coroutines — because otherwise the Host could not even cast
-the plugin to `ZetaPlugin`. Everything else the plugin brings with it. `zeta
-build` parses the DEX it produced and refuses to package anything that breaks
-that rule, or that names an entry point which does not exist.
+Four things must be *shared* rather than duplicated — the contract, the Kotlin
+standard library, coroutines, and Compose for a plugin that has a screen —
+because otherwise the Host could not even cast the plugin to `ZetaPlugin`.
+Everything else the plugin brings with it. The build parses the DEX it produced
+and refuses to package anything that breaks that rule, or that names an entry
+point which does not exist.
+
+A plugin can also *be* a screen rather than a job: it implements `ZetaUiPlugin`
+and supplies a composable, which the Host draws inside a container Activity of
+its own. An `Activity` shipped in a plugin could never be started — Android
+resolves components from an installed APK's manifest — and Compose needs no
+resources, so the package format does not change at all.
+[app/plugins/calculator/](app/plugins/calculator/) is the reference.
 
 The full account is in [app/README.md](app/README.md) and
 [app/docs/architecture.md](app/docs/architecture.md).

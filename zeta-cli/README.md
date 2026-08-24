@@ -46,6 +46,38 @@ weather/
 └── dist/weather-1.0.0.zeta
 ```
 
+## Or a screen, if that is what it should be
+
+A plugin does not have to be a job you start. It can be something the user
+*opens* — a screen, written in Compose, drawn inside the Host:
+
+```toml
+[ui]
+only = true        # this plugin is a screen and nothing else
+```
+
+```kotlin
+class CalculatorPlugin : ZetaUiPlugin {
+    override val id = "com.example.calculator"
+    override val name = "Calculator"
+    override val version = "1.0.0"
+
+    @Composable
+    override fun Content(host: ZetaUiHost) { /* your screen */ }
+}
+```
+
+Still no Android module, no manifest and no resources: Compose needs none, which
+is exactly why it is the way in. An `Activity` inside a plugin could never be
+started — Android resolves components from an installed APK's manifest — so the
+Host declares the container once and your plugin supplies the content.
+
+Compose comes from the Host, like the Kotlin runtime does. Do not add it to
+`[dependencies]`: `zeta build` refuses a package that carries its own copy, by
+reading the class definitions in the DEX it just produced.
+
+See [plugin-anatomy.md](docs/plugin-anatomy.md).
+
 ## Install
 
 ```bash
@@ -154,7 +186,7 @@ an explanation rather than letting you ship a plugin that cannot load. See
 **The major version of this package is the Host API version it targets.**
 
 ```bash
-npm install -g zetaforge@3     # builds plugins for Host API 3
+npm install -g zetaforge@4     # builds plugins for Host API 4
 ```
 
 A plugin declares the API it needs; an older Host refuses it, a newer one warns

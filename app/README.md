@@ -44,6 +44,7 @@ own DEX. A Gradle task verifies that on the built APK.
 10. [Proving Retrofit is not in the Host](#10-proving-retrofit-is-not-in-the-host)
 11. [Writing a plugin](#11-writing-a-plugin)
 11b. [Scheduling and notifications](#11b-scheduling-and-notifications)
+11c. [Screens: a plugin that is a mini app](#11c-screens-a-plugin-that-is-a-mini-app)
 12. [Tests](#12-tests)
 13. [Developer scripts](#13-developer-scripts)
 14. [Dynamic Plugin Limitations](#14-dynamic-plugin-limitations)
@@ -57,7 +58,7 @@ own DEX. A Gradle task verifies that on the built APK.
 | Piece | Role |
 |---|---|
 | **Host** (`host/`) | The installed app. UI only: import, list, start, inspect, logs. |
-| **SDK / plugin-api** (`plugin-api/`) | The versioned contract: `ZetaPlugin`, `PluginResult`, `PluginState`, `ZetaLog`. |
+| **SDK / plugin-api** (`plugin-api/`) | The versioned contract: `ZetaPlugin`, `PluginResult`, `PluginState`, `ZetaLog`, and `ui.ZetaUiPlugin` for plugins that are a screen. |
 | **Runtime** (`runtime/`) | Import, validation, installation, class loading, lifecycle, execution, logging, error handling. |
 | **Plugins** (`plugins/retrofit-demo/`, `plugins/files-demo/`) | Separately built Kotlin modules: one with external dependencies (Retrofit/OkHttp), one that needs a run-time permission (MediaStore). |
 | **Builder** (`plugin-builder/`) | Gradle tooling that turns a built plugin into a `.zeta` archive. |
@@ -705,22 +706,31 @@ Never replace a plugin while that same plugin is running.
 
 ### 11.10 Versioning
 
-Two numbers, with different meanings:
+Three numbers, with different meanings:
 
 | | Meaning | Today |
 |---|---|---|
-| `HOST_API_VERSION` | the contract the Host implements | 3 |
-| `formatVersion` | the `.zeta` layout the Host can read | 3 |
+| `HOST_API_VERSION` | the contract the Host implements | 4 |
+| `formatVersion` | the `.zeta` layout the Host can read | 4 |
+| `UI_API_VERSION` | the *screen* contract, for plugins that have one | 1 |
 
 A plugin declares `minHostApi` (a hard requirement — an older Host refuses it)
 and `maxHostApi` (what you tested — a newer Host only warns). A package whose
 `formatVersion` is newer than the Host is refused with an explicit message, so
 an old app never half-reads a new package.
 
+The screen contract is counted separately because it moves for a different
+reason: it is Compose's ABI, not the SDK's, and a Host that upgrades Compose can
+break an already compiled screen without changing anything else. A package
+records the version it was built against in `ui.uiApi`; a Host implementing an
+older one refuses to open the screen and says so, rather than letting it die
+mid-frame on a `NoSuchMethodError`.
+
 History: **API 1** the base contract; **2** adds `ZetaProgress` and the
-foreground service; **3** adds settings. **Format 1** plain strings for
-permissions; **2** structured permissions, special access, bundled sources;
-**3** declared settings.
+foreground service; **3** adds settings; **4** adds screens (`ZetaUiPlugin`).
+**Format 1** plain strings for permissions; **2** structured permissions,
+special access, bundled sources; **3** declared settings; **4** the `ui` block.
+**Screen contract 1** `Content(ZetaUiHost)`, Compose provided by the Host.
 
 ### 11.11 What a plugin can and cannot do
 
@@ -827,6 +837,203 @@ Every failing row has a button that opens the exact screen with the exact
 switch — "check your battery settings" is advice, not help. Where the phone is
 from a vendor known to add its own limits, the panel says so rather than letting
 the user conclude the app is broken.
+
+## 11c. Screens: a plugin that is a mini app
+
+A plugin that only runs when someone presses a button is a tool. One that runs
+on its own is a service. One the user *opens* is an app — and that is the third
+shape a `.zeta` can take.
+
+### The constraint that decides the whole design
+
+Android freezes an application's components at install time, from the manifest
+inside its APK. An `Activity` class living in a plugin's DEX is therefore
+unstartable: `startActivity` asks the system to resolve a component it has never
+heard of, and the system refuses. There is no flag for this — it is the same
+wall as §9's permissions, in a different place.
+
+So the Host declares the component **once**, and the plugin supplies *content*:
+
+```
+PluginCard [OPEN]  ──▶  PluginScreenActivity(pluginId)      ← the Host's, in its manifest
+                              │
+                              ├─ runtime.openUi(pluginId)   ← the class loader of §8, unchanged
+                              └─ plugin.Content(host)       ← a @Composable, not a component
+```
+
+Compose is what makes this pleasant rather than merely possible: it needs no
+resources, so a plugin still needs no `resources.arsc`, no `R` class and no
+change to the `.zeta` format. The package that draws a full screen is the same
+package that ran a batch job yesterday.
+
+### The contract
+
+```kotlin
+class CalculatorPlugin : ZetaUiPlugin {
+    override val id = "com.zetaforge.plugins.calculator"
+    override val name = "Calculator"
+    override val version = "1.0.0"
+
+    @Composable
+    override fun Content(host: ZetaUiHost) { /* your screen */ }
+}
+```
+
+`ZetaUiPlugin` extends `ZetaPlugin`, so a screen plugin is still a plugin: it
+has an id, a manifest, permissions, settings and an `execute`. The default
+`execute` says "this is a screen, open it" and does nothing, which is the honest
+answer for a plugin that is only a screen.
+
+`ZetaUiHost` is what the plugin gets instead of the `Activity` — because the
+Activity is the Host's, and handing it over would let a plugin finish it,
+replace its content view, or start a permission request the runtime has no
+record of:
+
+| | |
+|---|---|
+| `settings` | the saved values, in the same `Bundle` shape `execute` receives |
+| `scope` | a coroutine scope tied to the screen, with failures contained |
+| `ensurePermissions()` | the same runtime path a scheduled run takes |
+| `message(text)` / `setSubtitle(text)` | a line the Host renders, under the Host's bar |
+| `close()` | leave, for a screen that has finished |
+
+### Declaring it
+
+In the plugin's `build.gradle.kts`, next to everything else the manifest carries:
+
+```kotlin
+ui { only = true }        // this plugin is a screen and nothing else
+```
+
+Declared, never detected. The Host reads it before loading a byte of the
+plugin's code, so it knows whether to show **OPEN** — and whether it *can* — with
+no plugin code running. `only = true` also hides RUN and SCHEDULE, because
+scheduling something that exists only while a person is looking at it means
+nothing.
+
+### Compose is a boundary type
+
+This is the one rule that matters, and it is the same rule as the SDK's:
+
+```kotlin
+compileOnly(platform(libs.compose.bom))
+compileOnly(libs.compose.runtime)
+compileOnly(libs.compose.ui)
+compileOnly(libs.compose.foundation)
+compileOnly(libs.compose.material3)
+```
+
+The Host builds the composition and the plugin adds to it, so both halves must
+resolve to the *same class objects*. A bundled second copy of Compose gives you
+`ClassCastException: androidx.compose.runtime.Composer cannot be cast to
+androidx.compose.runtime.Composer`, from inside a frame, with no useful stack.
+
+Three separate things make sure that never ships:
+
+* `buildZetaPlugin` reads the produced DEX's **class definitions** — not its
+  string table, which legitimately mentions the contract constantly — and fails
+  the build if the plugin *defines* anything under `com.zetaforge.sdk`,
+  `kotlin.`, `kotlinx.coroutines.` or `androidx.compose.`;
+* `SharedContract` re-checks at load time and refuses with a sentence;
+* the manifest records a `ui.uiApi`, and a Host implementing an older screen
+  contract says so instead of dying on a `NoSuchMethodError`.
+
+The screen contract is versioned separately from the SDK
+(`ZetaSdk.UI_API_VERSION`) precisely because it moves for a different reason: it
+is Compose's ABI, and a Host that upgrades Compose can break an already compiled
+screen without changing anything else.
+
+### What happens when a plugin throws
+
+`execute` was easy to contain: one suspend call, on a background dispatcher,
+inside a `try`. A screen has no single call. Its code is re-entered by the
+framework from four directions, and an exception on any of them unwinds through
+`ViewRootImpl` and kills the process. Two mechanisms cover it:
+
+| Where it throws | What catches it |
+|---|---|
+| touch dispatch, key dispatch, measure, layout, draw | `PluginCrashGuard`, the `FrameLayout` the plugin's views sit in |
+| composition, recomposition, `LaunchedEffect`, `host.scope` | the plugin's **own** `Recomposer`, given its own `CoroutineExceptionHandler` |
+
+Either way the result is the same: the screen is replaced by an error report
+carrying the plugin's exception and the top of its stack, the plugin is
+unloaded, and the Host keeps running. Nothing is repaired in place — after an
+exception the composition describes a tree that was never finished, so it is torn
+down and the next OPEN starts from a fresh instance.
+
+Measured on a device, not assumed: a throw in a click handler and a throw during
+recomposition both land on the error screen with the Host's process untouched.
+
+### Identity, and why the bar is a separate composition
+
+A screen plugin runs with the Host's UID and the Host's permissions. A
+convincing fake of the Host's own UI is the cheapest attack such a plugin has —
+so the bar carrying the plugin's name and the **PLUGIN** badge is composed in a
+*different view, above* the plugin's, and is not reachable by the plugin's
+drawing. The plugin owns the second line and nothing else. It can still open a
+`Dialog` over the window, which Android gives no way to prevent; what it cannot
+do is quietly repaint the Host's identity.
+
+### Lifecycle: a screen pins its plugin
+
+A screen is the first thing in ZetaForge that keeps a plugin instance alive with
+nobody executing it, which breaks two assumptions the runtime used to make:
+
+* **unload is refused** while a screen is open — dropping the class loader under
+  a live composition leaves objects whose classes no longer resolve;
+* **uninstall and re-import wait**. They ask the screen to close through
+  `ZetaUiSessions.closeRequests` and wait for the session to end (bounded, so a
+  stuck screen cannot hang an uninstall for ever). In the log:
+
+```
+Installed in com.zetaforge.plugins.calculator
+Waiting for the open screen to close
+Screen closed
+Unloaded
+```
+
+### What a screen cannot keep
+
+`rememberSaveable` is a trap here, and the reference plugin says so in a comment
+rather than in a doc nobody reads. Saved instance state goes into a `Bundle` that
+Android restores with the **Host's** class loader, which has never heard of the
+plugin's types: a screen that saves its own types there restores into a
+`ClassNotFoundException`. The container Activity declares `configChanges`, so
+rotation is already handled; what is given up is state across process death, and
+a screen with state worth keeping should write it somewhere it owns, exactly as a
+job would.
+
+### The reference plugin
+
+`plugins/calculator/` is a calculator, chosen because it exercises the whole
+screen path and nothing else: touch input, state across recompositions, the
+Host's Material theme, its declared settings — and no permission, no network, no
+storage. If it works, what works is the mechanism.
+
+```bash
+./gradlew :plugins:calculator:buildZetaPlugin
+```
+
+Its arithmetic is `BigDecimal`, in a `CalculatorEngine.kt` with no Android and no
+Compose in it — which is the shape to copy. Everything easy to get subtly wrong
+in a calculator lives in ordinary Kotlin, and the composables only draw.
+
+During development, the screen can be opened from the shell like the other
+developer hooks (debug builds only; the container Activity is not exported, so
+this goes through `MainActivity` rather than starting it directly):
+
+```bash
+adb shell am start -n com.zetaforge.app/.MainActivity \
+    -a com.zetaforge.app.action.OPEN_SCREEN --es pluginId com.zetaforge.plugins.calculator
+```
+
+### The cost, stated plainly
+
+The Host's release build now keeps all of `androidx.compose.**`, including the
+icons, for the same reason it already keeps the whole Kotlin runtime: R8 sees
+only what the *Host* calls, and anything a plugin uses but the Host happens not
+to would be removed — a crash that appears in release and never in debug. That
+is the real price of being a plugin host, paid a second time.
 
 ## 12. Tests
 
@@ -1012,6 +1219,8 @@ What this PoC **demonstrably** does:
 | Real HTTPS request from plugin code | **works** |
 | Background execution, structured results, structured logs | **works** |
 | Error containment (plugin throws / network fails) | **works** — Host survives, plugin reports `FAILED` |
+| A plugin that is a **screen**, drawn with the Host's Compose | **works** — see §11c; the calculator is the reference |
+| Error containment for a screen (throws in a click handler *or* during recomposition) | **works** — error report on screen, plugin unloaded, Host process untouched |
 | Repeated execution, unload, uninstall, re-import | **works** |
 | Manifest + package validation, SHA-256 checksums, Host API range | **works** |
 | Run-time permissions requested per plugin, with reasons | **works** |
@@ -1024,13 +1233,14 @@ What this PoC **does not** do (by design, in scope for later):
 | Area | Reality today |
 |---|---|
 | **Permissions** | Implemented: plugins declare permissions with a reason, the runtime evaluates them on every run and requests what is missing (run-time dialogs *and* special-access Settings screens). The hard limit stays: a permission absent from the Host APK can never be granted, so `zetaforge.permissions` is the ceiling. Grants are process-wide, not per plugin. |
-| **Android resources** | Plugins ship code only. `R`-based resources, layouts, drawables and string resources from the plugin APK are not merged into the Host and are not accessible. Use `assets/` in the package for data. |
-| **Manifest components** | `Activity`, `Service`, `BroadcastReceiver` and `ContentProvider` declared by a plugin are ignored: the Host manifest is fixed at install time and Android cannot register components dynamically. |
+| **Android resources** | Plugins ship code only. `R`-based resources, layouts, drawables and string resources from the plugin APK are not merged into the Host and are not accessible. Use `assets/` in the package for data — and for a *user interface*, use a screen (§11c): Compose needs no resources at all, which is exactly why it is the way in. |
+| **Manifest components** | `Activity`, `Service`, `BroadcastReceiver` and `ContentProvider` declared by a plugin are ignored: the Host manifest is fixed at install time and Android cannot register components dynamically. A plugin that needs a screen supplies a composable instead, and the Host's own `PluginScreenActivity` is the component (§11c). |
 | **AndroidX in plugins** | Plain JVM/Android libraries work. AndroidX libraries that rely on resources, `ContentProvider` initialisers (`androidx.startup`) or manifest merging will not work unmodified. |
 | **Native libraries (`.so`)** | Not supported. `libs/` exists in the package format and the class loader already accepts a native library path, but nothing extracts or validates `.so` yet. |
 | **Process isolation** | None. Plugin code runs in the Host process with the Host UID. This is a trust boundary, not a sandbox. |
 | **Digital signature** | Packages are unsigned. `manifest.signature` is always `null` and `PluginVerifier` is the seam where `SignaturePluginVerifier` will plug in. |
-| **WorkManager / scheduling** | Out of scope; `PluginState` models the lifecycle a scheduler will need. |
+| **Screen state across process death** | A screen cannot use `rememberSaveable` for its own types: saved state is restored with the Host's class loader, which cannot see them. Rotation is handled (`configChanges`); anything more durable the plugin must persist itself. |
+| **Screen isolation** | A screen runs in the Host's process with the Host's permissions, like any plugin. The title bar it cannot repaint is an honesty measure, not a sandbox: a plugin can still open a `Dialog` over the window. |
 | **Hot reload, auto-update, marketplace** | Out of scope. |
 | **Version conflicts** | `DelegateLastClassLoader` gives the plugin's own libraries priority, which is the mechanism that makes divergent versions possible. Exhaustive conflict handling (e.g. shared singletons, static state across loaders) is not solved. |
 
@@ -1059,7 +1269,8 @@ the Host's permissions**. It can do everything the Host can do. Therefore:
 2. Persisted logs and run history (`ZetaLogger.persister` seam).
 3. Capability-based Host APIs (versioned, declared in the manifest) instead of a
    bare `Context`.
-4. Scheduling and background execution driven by `PluginState`.
+4. A durable place for a screen to keep its state, since `rememberSaveable`
+   cannot carry the plugin's own types across process death (§11c).
 5. Optional isolated process for untrusted plugins.
 6. Native library support via `libs/`.
 7. Plugin assets and (later) a resource story.
