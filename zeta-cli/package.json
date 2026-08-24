@@ -39,7 +39,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test \"test/*.test.js\"",
+    "test": "node --test",
     "lint": "node --check bin/zeta.js",
     "prepublishOnly": "node scripts/verify-assets.mjs"
   },

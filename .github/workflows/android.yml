@@ -1,0 +1,84 @@
+name: Android
+
+# The half that needs the Android SDK: the runtime's unit tests, the contract,
+# and proving that a plugin can be scaffolded and packaged from nothing.
+#
+# Split from ci.yml so a documentation change does not pay for a Gradle build,
+# and merged into a single job so the SDK and the Gradle cache are set up once
+# rather than twice.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "zetaforge-doc/**"
+      - "**/*.md"
+      - ".github/workflows/docs.yml"
+      - ".github/ISSUE_TEMPLATE/**"
+  pull_request:
+    paths-ignore:
+      - "zetaforge-doc/**"
+      - "**/*.md"
+      - ".github/workflows/docs.yml"
+      - ".github/ISSUE_TEMPLATE/**"
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: runtime, contract and a real plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # Caches the Gradle distribution, the dependency cache and the
+      # configuration cache. This is what turns a five minute build into a one
+      # minute one on the second run.
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-35"
+
+      # One Gradle invocation rather than three: the daemon starts once and the
+      # task graph is configured once.
+      - name: Unit tests, contract and a demo plugin
+        working-directory: app
+        run: >
+          ./gradlew
+          :runtime:test
+          :plugin-api:apiJar
+          :plugins:retrofit-demo:buildZetaPlugin
+          --console=plain --no-daemon
+
+      - name: Stage the CLI assets
+        run: node scripts/sync-assets.mjs
+
+      - run: npm ci
+
+      # The real proof: scaffold a plugin from nothing and package it. Running
+      # it needs a device, which is emulator.yml's job.
+      - name: Scaffold, build and inspect a plugin
+        run: |
+          node zeta-cli/bin/zeta.js new ci-plugin --author CI
+          cd ci-plugin
+          node ../zeta-cli/bin/zeta.js build
+          node ../zeta-cli/bin/zeta.js test
+          node ../zeta-cli/bin/zeta.js inspect dist/ci-plugin-1.0.0.zeta

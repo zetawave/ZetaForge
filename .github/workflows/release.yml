@@ -49,7 +49,7 @@ jobs:
 
       - name: Test
         run: |
-          npm ci --prefix zeta-cli
+          npm ci
           npm test --prefix zeta-cli
           node scripts/gradle.mjs :runtime:test
 

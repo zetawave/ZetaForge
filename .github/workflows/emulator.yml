@@ -1,0 +1,83 @@
+name: Emulator
+
+# The end-to-end proof: a plugin scaffolded, built, installed into the Host and
+# executed on a real Android image, with the result read back.
+#
+# Deliberately NOT on every push. It boots an emulator on a runner without
+# hardware acceleration and takes ten to fifteen minutes — longer than
+# everything else in this repository put together, for a signal that changes
+# only when the runtime does. It runs weekly, before a release, and whenever
+# someone asks for it.
+
+on:
+  schedule:
+    # Monday, early. Nobody is waiting for it.
+    - cron: "0 4 * * 1"
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: emulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-on-device:
+    name: run a plugin on an emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+
+      - name: Build the Host and stage the CLI
+        run: |
+          node scripts/gradle.mjs :plugin-api:apiJar :host:assembleDebug
+          node scripts/sync-assets.mjs
+          npm ci
+
+      # Booting an emulator is most of the cost; the AVD is cached so only the
+      # first run on a given configuration pays for creating it.
+      - name: Cache the AVD
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-34-x86_64
+
+      - name: Create the AVD
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "AVD created"
+
+      - name: Install the Host, then build and run a plugin
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            node zeta-cli/bin/zeta.js host install --apk app/host/build/outputs/apk/debug/host-debug.apk
+            node zeta-cli/bin/zeta.js new ci-plugin --author CI
+            cd ci-plugin
+            node ../zeta-cli/bin/zeta.js build
+            node ../zeta-cli/bin/zeta.js install --no-build
+            node ../zeta-cli/bin/zeta.js run
