@@ -1,9 +1,11 @@
 name: Release
 
-# Publishing is triggered by pushing a tag, which is what `npm run release`
-# does at the end. Everything before the tag — version bump, build, tests — has
-# already happened locally, so this workflow only has to produce the artifacts
-# and publish them.
+# Triggered by the tag that `npm run release` pushes at the end.
+#
+# npm is published by the release script itself, from the credentials of whoever
+# is releasing. This workflow does the half that needs a build environment
+# rather than a secret: it produces the Host APK and the contract jar, and
+# attaches them to the GitHub release.
 
 on:
   push:
@@ -12,7 +14,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   publish:
@@ -22,7 +23,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: https://registry.npmjs.org
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -60,12 +60,6 @@ jobs:
              release/zetaforge-host-${{ steps.version.outputs.value }}.apk
           cp zeta-cli/assets/zetaforge-api-*.jar release/
           (cd release && sha256sum * > SHA256SUMS.txt)
-
-      - name: Publish to npm
-        run: npm publish --access public --provenance
-        working-directory: zeta-cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create the GitHub release
         uses: softprops/action-gh-release@v2

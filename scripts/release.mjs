@@ -7,7 +7,7 @@
  *   npm run release:major      3.0.0 -> 4.0.0   (a new Host API — see below)
  *   npm run release:dry        do everything except publish
  *
- * Flags: --no-github (npm only), --skip-tests, --yes, --force, --version <v>,
+ * Flags: --skip-tests, --yes, --force, --version <v>,
  * --otp <code> (when the npm token does not bypass 2FA)
  *
  * It refuses to start on a dirty tree, on the wrong branch, or without the
@@ -76,14 +76,6 @@ async function main() {
     }
     info(`npm user: ${whoami.stdout.trim()}`);
 
-    // The GitHub release is a nice-to-have: it attaches the Host APK so
-    // `zeta host install` can find it. Publishing to npm does not depend on it,
-    // so a missing gh downgrades the release instead of blocking it.
-    if (!hasCommand("gh", ["--version"])) {
-      warn("gh not found: npm will be published, the GitHub release skipped.");
-      warn("Install https://cli.github.com and run `npm run release:github` after.");
-      args["no-github"] = true;
-    }
   }
 
   // ---- 2. version --------------------------------------------------------
@@ -194,27 +186,18 @@ async function main() {
   step("publishing to npm");
   publishToNpm();
 
-  if (args["no-github"]) {
-    warn("GitHub release skipped.");
-  } else {
-    step("creating the GitHub release");
-    const staged = path.join(app, "build", apkName);
-    fs.copyFileSync(apk, staged);
-    run("gh", [
-      "release", "create", `v${version}`,
-      staged,
-      path.join(cli, "assets", `zetaforge-api-${hostApi}.jar`),
-      "--title", `ZetaForge ${version}`,
-      "--notes", releaseNotes(version, hostApi),
-    ]);
-  }
+  // The GitHub release is created by the Release workflow, which the tag push
+  // above just triggered. It builds the Host APK on a clean machine and attaches
+  // it, which is work this script has no reason to duplicate — and no reason to
+  // require `gh` for.
+  info("the tag triggers the Release workflow, which attaches the Host APK");
 
   console.log(`
   ✓ released ${version}
 
     npm      npm install -g zetaforge-cli@${version}
-    docs     https://zetawave.github.io/ZetaForge/${args["no-github"] ? "" : `
-    github   https://github.com/zetawave/ZetaForge/releases/tag/v${version}`}
+    docs     https://zetawave.github.io/ZetaForge/
+    github   https://github.com/zetawave/ZetaForge/releases/tag/v${version}
     try it   npx zetaforge-cli@${version} doctor
 `);
 }
@@ -314,30 +297,6 @@ function writeVersion(version) {
   return function restore() {
     for (const [file, content] of before) fs.writeFileSync(file, content);
   };
-}
-
-function releaseNotes(version, hostApi) {
-  const changelog = path.join(cli, "CHANGELOG.md");
-  const section = fs.existsSync(changelog)
-    ? (fs.readFileSync(changelog, "utf8").split(/^## /m).find((s) => s.startsWith(version)) || "")
-        .split("\n").slice(1).join("\n").trim()
-    : "";
-
-  return [
-    section || "See the changelog.",
-    "",
-    "---",
-    "",
-    `**Host API ${hostApi}** — plugins built with \`zetaforge@${hostApi}\` run on this Host.`,
-    "",
-    "```bash",
-    `npm install -g zetaforge-cli@${version}`,
-    "zeta doctor",
-    "zeta new my-plugin",
-    "```",
-    "",
-    `\`zetaforge-host-${version}.apk\` is the app itself; \`zeta host install\` downloads it for you.`,
-  ].join("\n");
 }
 
 // --- helpers ---------------------------------------------------------------
