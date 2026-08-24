@@ -83,13 +83,20 @@ plugin behaves when the screen goes off.
 zeta build && zeta install && zeta run --quiet || echo "the plugin failed"
 ```
 
-### Passing inputs
+### Trying a different configuration
 
-Values passed explicitly beat saved settings, which makes it possible to test a
-configuration without touching the form on the phone.
+`zeta run` executes with the settings saved on the device, so a different
+configuration is a change in the plugin's settings form and then another run.
 
-```bash
-zeta run --input city=Berlin --input dryRun=true
+To exercise several configurations quickly, call the logic directly from a JVM
+test instead — which is the argument for keeping it out of `execute` in the
+first place:
+
+```kotlin
+@Test
+fun `dry run copies nothing`() {
+    assertEquals(0, plan(files, done = emptySet(), limit = 0).size)
+}
 ```
 
 ## 3. Reading what you shipped

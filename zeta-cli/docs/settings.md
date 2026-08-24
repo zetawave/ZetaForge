@@ -81,7 +81,7 @@ The Bundle always contains every declared key, typed as declared: the Host
 merges the saved values over your defaults before calling you. Always pass a
 fallback anyway — it makes the function testable without a Host.
 
-Values passed explicitly (by a test, or by `zeta run --input`) win over the
+Values passed explicitly (by a test calling `execute` directly) win over the
 saved ones. Unknown keys are preserved rather than dropped.
 
 ## The run-time hook
