@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="ZetaForge">
+  <!--
+    The ZetaForge mark, same geometry as the app's own vector drawable
+    (app/host/src/main/res/drawable/ic_stat_zeta.xml): the bar, the diagonal,
+    the bar, with the crown notch and the anvil foot that make it read as a
+    forge rather than as a letter Z.
+  -->
+  <defs>
+    <linearGradient id="zf-tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0D1738"/>
+      <stop offset="1" stop-color="#27568F"/>
+    </linearGradient>
+  </defs>
+  <rect width="24" height="24" rx="6.7" fill="url(#zf-tile)"/>
+  <g fill="#FFFFFF" transform="translate(12 12) scale(0.62) translate(-12 -12)">
+    <path d="M5 3h14v3.2H5z"/>
+    <path d="M10.6 1.2h2.8v2h-2.8z"/>
+    <path d="M17.6 3.6l2.6 2.2-13.2 12.6-2.6-2.2z"/>
+    <path d="M5 17.8h14v3.2H5z"/>
+    <path d="M8.4 21h7.2v1.8H8.4z"/>
+  </g>
+</svg>

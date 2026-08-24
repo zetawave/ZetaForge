@@ -1,0 +1,55 @@
+[
+  {
+    "title": "Getting started",
+    "items": [
+      { "slug": "introduction", "title": "Introduction" },
+      { "slug": "installation", "title": "Installation" },
+      { "slug": "quick-start", "title": "Quick start" },
+      { "slug": "core-concepts", "title": "Core concepts" }
+    ]
+  },
+  {
+    "title": "Writing plugins",
+    "items": [
+      { "slug": "plugin-anatomy", "title": "Plugin anatomy" },
+      { "slug": "lifecycle", "title": "Lifecycle and results" },
+      { "slug": "settings", "title": "Settings" },
+      { "slug": "permissions", "title": "Permissions" },
+      { "slug": "dependencies", "title": "Dependencies" },
+      { "slug": "scheduling", "title": "Scheduling" },
+      { "slug": "screens", "title": "Screens" },
+      { "slug": "logging-and-progress", "title": "Logging and progress" },
+      { "slug": "testing", "title": "Testing" }
+    ]
+  },
+  {
+    "title": "Reference",
+    "items": [
+      { "slug": "cli-reference", "title": "CLI reference" },
+      { "slug": "sdk-reference", "title": "SDK reference" },
+      { "slug": "manifest-reference", "title": "zetaplugin.toml" },
+      { "slug": "package-format", "title": "The .zeta format" },
+      { "slug": "versioning", "title": "Versioning" }
+    ]
+  },
+  {
+    "title": "Understanding ZetaForge",
+    "items": [
+      { "slug": "architecture", "title": "Architecture" },
+      { "slug": "class-loading", "title": "Class loading" },
+      { "slug": "security", "title": "Security model" },
+      { "slug": "limitations", "title": "Limitations" }
+    ]
+  },
+  {
+    "title": "Project",
+    "items": [
+      { "slug": "publishing", "title": "Publishing a plugin" },
+      { "slug": "troubleshooting", "title": "Troubleshooting" },
+      { "slug": "faq", "title": "FAQ" },
+      { "slug": "contributing", "title": "Contributing" },
+      { "slug": "building-from-source", "title": "Building from source" },
+      { "slug": "licensing", "title": "Licensing" }
+    ]
+  }
+]

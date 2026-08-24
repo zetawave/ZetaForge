@@ -1,0 +1,17 @@
+{
+  "name": "zetaforge-doc",
+  "version": "4.0.0",
+  "private": true,
+  "description": "The ZetaForge documentation site. Static HTML, no dependencies.",
+  "type": "module",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "build:local": "node build.mjs --base /",
+    "dev": "node build.mjs --base / --serve",
+    "preview": "node build.mjs --serve",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  }
+}
