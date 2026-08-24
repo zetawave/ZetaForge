@@ -82,7 +82,7 @@ function help(commandName) {
   ui.table(COMMANDS.map((c) => [c.spec.name, c.spec.summary]));
   ui.plain();
   ui.plain(`  ${ui.dim("zeta help <command>")}  for details on one command`);
-  ui.plain(`  ${ui.dim("docs")}                 https://github.com/zetaforge/zetaforge/tree/main/zeta-cli/docs`);
+  ui.plain(`  ${ui.dim("docs")}                 https://github.com/zetawave/ZetaForge/tree/main/zeta-cli/docs`);
   ui.plain();
   return 0;
 }

@@ -269,7 +269,7 @@ export function runGradle(work, tasks, options = {}) {
 
     child.on("error", (error) =>
       reject(new ZetaError(`Could not start Gradle: ${error.message}`, {
-        hint: "Check that the CLI was installed completely (try reinstalling zetaforge).",
+        hint: "Check that the CLI was installed completely (try reinstalling zetaforge-cli).",
       })),
     );
 

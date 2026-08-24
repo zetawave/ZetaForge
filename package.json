@@ -1,6 +1,6 @@
 {
   "name": "zetaforge-workspace",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": true,
   "description": "ZetaForge \u2014 the Android plugin runtime (app/) and the zeta CLI (zeta-cli/).",
   "license": "SEE LICENSE IN LICENSE",
@@ -34,6 +34,7 @@
     "release:minor": "node scripts/release.mjs --bump minor",
     "release:major": "node scripts/release.mjs --bump major",
     "release:dry": "node scripts/release.mjs --dry-run",
+    "release:npm": "node scripts/release.mjs --no-github",
     "//  \u2500\u2500 housekeeping \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500": "",
     "clean": "node scripts/gradle.mjs clean && node -e \"require('fs').rmSync('zeta-cli/node_modules',{recursive:true,force:true})\"",
     "lint": "node scripts/lint.mjs"

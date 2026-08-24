@@ -37,6 +37,9 @@ lint-results*.*
 # --- Collected artifacts ---------------------------------------------------
 dist/
 
+# --- Documentation site: built in CI, never committed ----------------------
+zetaforge-doc/dist/
+
 # --- Private plugins: yours, never published -------------------------------
 plugins-local/
 

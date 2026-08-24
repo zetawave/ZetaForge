@@ -7,6 +7,8 @@
  *   npm run release:major      3.0.0 -> 4.0.0   (a new Host API — see below)
  *   npm run release:dry        do everything except publish
  *
+ * Flags: --no-github (npm only), --skip-tests, --yes, --force, --version <v>
+ *
  * It refuses to start on a dirty tree, on the wrong branch, or without the
  * credentials it will need at the end — because the worst possible release is
  * one that fails halfway, after the tag has been pushed.
@@ -56,10 +58,30 @@ async function main() {
       fail(`On branch "${branch}", not "${RELEASE_BRANCH}".`, "Use --force to release anyway.");
     }
     requireCommand("npm", ["--version"], "npm is required to publish.");
-    requireCommand("gh", ["--version"],
-      "The GitHub CLI is required to attach the Host APK.\n    https://cli.github.com — then: gh auth login");
-    if (spawnSync("npm", ["whoami"], { encoding: "utf8", shell: true }).status !== 0) {
-      fail("Not logged in to npm.", "Run: npm login");
+
+    // Checked here rather than at the end, because the worst release is one
+    // that fails after the tag has been pushed. A token in ~/.npmrc that has
+    // expired fails exactly like never having logged in, and the message has
+    // to tell the two apart.
+    const whoami = spawnSync("npm", ["whoami"], { encoding: "utf8", shell: true });
+    if (whoami.status !== 0) {
+      fail(
+        "npm rejected your credentials.",
+        "If ~/.npmrc has an _authToken, it has expired or been revoked:\n" +
+          "    create a new automation token at https://www.npmjs.com/settings/~/tokens\n" +
+          "    and put it back as //registry.npmjs.org/:_authToken=...\n" +
+          "    Otherwise just run: npm login",
+      );
+    }
+    info(`npm user: ${whoami.stdout.trim()}`);
+
+    // The GitHub release is a nice-to-have: it attaches the Host APK so
+    // `zeta host install` can find it. Publishing to npm does not depend on it,
+    // so a missing gh downgrades the release instead of blocking it.
+    if (!hasCommand("gh", ["--version"])) {
+      warn("gh not found: npm will be published, the GitHub release skipped.");
+      warn("Install https://cli.github.com and run `npm run release:github` after.");
+      args["no-github"] = true;
     }
   }
 
@@ -151,26 +173,67 @@ async function main() {
 
   // ---- 7. publish --------------------------------------------------------
   step("publishing to npm");
-  run("npm", ["publish", "--access", "public"], { cwd: cli });
+  publishToNpm();
 
-  step("creating the GitHub release");
-  const staged = path.join(app, "build", apkName);
-  fs.copyFileSync(apk, staged);
-  run("gh", [
-    "release", "create", `v${version}`,
-    staged,
-    path.join(cli, "assets", `zetaforge-api-${hostApi}.jar`),
-    "--title", `ZetaForge ${version}`,
-    "--notes", releaseNotes(version, hostApi),
-  ]);
+  if (args["no-github"]) {
+    warn("GitHub release skipped.");
+  } else {
+    step("creating the GitHub release");
+    const staged = path.join(app, "build", apkName);
+    fs.copyFileSync(apk, staged);
+    run("gh", [
+      "release", "create", `v${version}`,
+      staged,
+      path.join(cli, "assets", `zetaforge-api-${hostApi}.jar`),
+      "--title", `ZetaForge ${version}`,
+      "--notes", releaseNotes(version, hostApi),
+    ]);
+  }
 
   console.log(`
   ✓ released ${version}
 
-    npm      npm install -g zetaforge@${version}
-    github   https://github.com/zetaforge/zetaforge/releases/tag/v${version}
-    try it   npx zetaforge@${version} doctor
+    npm      npm install -g zetaforge-cli@${version}
+    docs     https://zetawave.github.io/ZetaForge/${args["no-github"] ? "" : `
+    github   https://github.com/zetawave/ZetaForge/releases/tag/v${version}`}
+    try it   npx zetaforge-cli@${version} doctor
 `);
+}
+
+/**
+ * Publishes, and turns npm's two most likely refusals into an instruction.
+ *
+ * Both are things a first release runs into and neither is obvious from npm's
+ * own output: the name can belong to somebody else, and a token can be
+ * read-only.
+ */
+function publishToNpm() {
+  const result = spawnSync("npm", ["publish", "--access", "public"], {
+    cwd: cli,
+    encoding: "utf8",
+    stdio: "pipe",
+    shell: process.platform === "win32",
+  });
+  process.stdout.write(result.stdout || "");
+  if (result.status === 0) return;
+
+  const output = `${result.stdout || ""}${result.stderr || ""}`;
+  process.stderr.write(output);
+  const name = readJson(path.join(cli, "package.json")).name;
+
+  if (/403|forbidden|not allowed to publish/i.test(output)) {
+    fail(
+      `npm refused to publish "${name}".`,
+      "Either the name belongs to someone else, or your token is read-only.\n" +
+        `    Check:  npm view ${name}\n` +
+        "    A publish needs an *automation* or *publish* token, not a read-only one.",
+    );
+  }
+  if (/402|payment required/i.test(output)) {
+    fail("npm asked for payment: a scoped package defaults to private.",
+      "publishConfig.access is already \"public\" — check it was not removed.");
+  }
+  fail("npm publish failed.", "The output above is npm's.");
 }
 
 // --- version bookkeeping ---------------------------------------------------
@@ -238,7 +301,7 @@ function releaseNotes(version, hostApi) {
     `**Host API ${hostApi}** — plugins built with \`zetaforge@${hostApi}\` run on this Host.`,
     "",
     "```bash",
-    `npm install -g zetaforge@${version}`,
+    `npm install -g zetaforge-cli@${version}`,
     "zeta doctor",
     "zeta new my-plugin",
     "```",
@@ -291,8 +354,12 @@ function gradle(tasks) {
 }
 
 function requireCommand(command, probe, message) {
+  if (!hasCommand(command, probe)) fail(`${command} is not available.`, message);
+}
+
+function hasCommand(command, probe) {
   const result = spawnSync(command, probe, { encoding: "utf8", shell: process.platform === "win32" });
-  if (result.status !== 0) fail(`${command} is not available.`, message);
+  return result.status === 0;
 }
 
 function readJson(file) {

@@ -92,7 +92,7 @@ export async function run(options) {
     contract ? "ok" : "bad",
   ]);
   if (!contract) {
-    problems.push(["The CLI installation is incomplete. Reinstall:", "  npm install -g zetaforge"]);
+    problems.push(["The CLI installation is incomplete. Reinstall:", "  npm install -g zetaforge-cli"]);
   }
 
   // Device

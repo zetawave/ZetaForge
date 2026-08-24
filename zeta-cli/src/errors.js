@@ -43,7 +43,7 @@ export function reportError(error) {
       ui.plain(`${ui.cyan("hint")}   ${error.hint}`);
     }
     if (error.docs) {
-      ui.plain(`${ui.dim("docs")}   https://github.com/zetaforge/zetaforge/blob/main/zeta-cli/docs/${error.docs}`);
+      ui.plain(`${ui.dim("docs")}   https://github.com/zetawave/ZetaForge/blob/main/zeta-cli/docs/${error.docs}`);
     }
   } else {
     ui.plain(`${ui.red("internal error")}  ${error.message}`);
@@ -51,7 +51,7 @@ export function reportError(error) {
     ui.plain(ui.dim(error.stack || ""));
     ui.plain();
     ui.plain(`${ui.cyan("hint")}   This is a bug in the zeta CLI. Please report it with the output above:`);
-    ui.plain("       https://github.com/zetaforge/zetaforge/issues/new");
+    ui.plain("       https://github.com/zetawave/ZetaForge/issues/new");
   }
   ui.plain();
   return 1;

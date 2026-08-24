@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://zetawave.github.io/ZetaForge/
+    about: Installation, the contract, settings, permissions, scheduling, screens, architecture.
+  - name: Troubleshooting
+    url: https://zetawave.github.io/ZetaForge/troubleshooting/
+    about: The errors people hit most, and what each one means. Try this before opening an issue.
+  - name: Report a vulnerability
+    url: https://github.com/zetawave/ZetaForge/security/advisories/new
+    about: Security issues are reported privately, never as a public issue.

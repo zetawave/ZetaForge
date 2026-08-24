@@ -1,0 +1,65 @@
+name: Documentation
+
+# Builds zetaforge-doc/ and publishes it to GitHub Pages.
+#
+# Nothing is committed to the repository: dist/ is generated here on every push
+# to main that touches the docs. The site has no dependencies, so there is no
+# install step and nothing to cache.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "zetaforge-doc/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+# Read the repository, write the Pages deployment, and prove the artifact came
+# from this workflow.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a queued run supersedes an older one but never
+# cancels a deployment already in progress.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build the site
+        working-directory: zetaforge-doc
+        # The base path is the repository name, because a project page is served
+        # from a subdirectory. Taken from the repository rather than hardcoded,
+        # so a fork publishes correctly without editing anything.
+        run: node build.mjs --base "/${GITHUB_REPOSITORY#*/}/"
+
+      - name: Check every internal link resolves
+        working-directory: zetaforge-doc
+        run: node scripts/check-links.mjs
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: zetaforge-doc/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

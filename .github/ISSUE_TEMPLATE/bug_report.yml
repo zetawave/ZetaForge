@@ -1,0 +1,85 @@
+name: Bug report
+description: Something does not work the way it says it does
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The two things that make a report solvable
+        are the exact output and the versions — please do not summarise them.
+
+        Security issues do **not** go here: see
+        [SECURITY.md](https://github.com/zetawave/ZetaForge/blob/main/SECURITY.md).
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which part
+      options:
+        - The CLI (zeta)
+        - The app (host / runtime)
+        - Building a plugin
+        - Running a plugin on a device
+        - Scheduling
+        - Screens
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what happened, and what you expected instead.
+      placeholder: |
+        I ran `zeta build` on a plugin with a [ui] block and …
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The smallest sequence that shows it. A minimal `zetaplugin.toml` helps enormously.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `zeta doctor`
+      description: Paste it whole — it answers most environment questions at once.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: |
+        The error as printed, and the relevant part of `zeta logs` if the problem
+        happens on a device. `zeta build --verbose` for build failures.
+      render: text
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: "`zeta --version` and `zeta host version`"
+      placeholder: "CLI 4.0.0, host 4.0.0 (Host API 4)"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS and device
+      placeholder: "Windows 11, Pixel 7 (Android 14) / emulator API 34"
+    validations:
+      required: true

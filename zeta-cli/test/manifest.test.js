@@ -114,7 +114,7 @@ test("rejects minHostApi greater than maxHostApi", () => {
 
 test("says which CLI to install when the plugin needs a newer Host", () => {
   const dir = project(VALID.replace("[plugin]", "[plugin]\nminHostApi = 99"));
-  throwsWith(() => loadProject(dir), /zetaforge@99/);
+  throwsWith(() => loadProject(dir), /zetaforge-cli@99/);
 });
 
 test("explains itself when there is no descriptor at all", () => {

@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose a change to what ZetaForge does
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Anything that changes the plugin contract, the package format or the
+        host's permission set is a compatibility event — those get discussed
+        here before any code is written, which is exactly what this form is for.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that you cannot do today? Describe the situation, not the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: If you have a shape in mind, sketch it — a snippet of `zetaplugin.toml` or Kotlin is worth a paragraph.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Workarounds you found, and why they are not enough.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part it touches
+      multiple: true
+      options:
+        - The plugin contract (compatibility event)
+        - The package format (compatibility event)
+        - The host permission set
+        - The CLI
+        - The app's UI
+        - Scheduling
+        - Screens
+        - Documentation
+    validations:
+      required: true

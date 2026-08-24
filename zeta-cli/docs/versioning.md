@@ -8,13 +8,13 @@
 | **Package format version** | the layout of the `.zeta` file | 4 |
 | **Screen contract version** | `ui.uiApi`, for a plugin that has a screen | 1 |
 
-**The major version of the `zetaforge` npm package is the Host API version it
-targets.** `zetaforge@4` builds plugins for Host API 4. Minor and patch releases
+**The major version of the `zetaforge-cli` npm package is the Host API version it
+targets.** `zetaforge-cli@4` builds plugins for Host API 4. Minor and patch releases
 of the CLI never change the contract.
 
 ```bash
-npm install -g zetaforge@4      # pinned to a contract
-npx zetaforge@4 build           # same, without installing
+npm install -g zetaforge-cli@4      # pinned to a contract
+npx zetaforge-cli@4 build           # same, without installing
 ```
 
 This is why the contract jar ships inside the npm package rather than being

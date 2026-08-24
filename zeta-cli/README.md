@@ -5,9 +5,9 @@ packaged as a single `.zeta` file that any ZetaForge install can load at run
 time.
 
 ```bash
-npx zetaforge new weather
+npx zetaforge-cli new weather
 cd weather
-npx zetaforge dev
+npx zetaforge-cli dev
 ```
 
 That is the whole loop: save a file, and a few seconds later the plugin is
@@ -81,7 +81,7 @@ See [plugin-anatomy.md](docs/plugin-anatomy.md).
 ## Install
 
 ```bash
-npm install -g zetaforge     # or use npx, no install
+npm install -g zetaforge-cli     # or use npx, no install
 zeta doctor                  # checks the machine and says what is missing
 ```
 
@@ -186,7 +186,7 @@ an explanation rather than letting you ship a plugin that cannot load. See
 **The major version of this package is the Host API version it targets.**
 
 ```bash
-npm install -g zetaforge@4     # builds plugins for Host API 4
+npm install -g zetaforge-cli@4     # builds plugins for Host API 4
 ```
 
 A plugin declares the API it needs; an older Host refuses it, a newer one warns
@@ -205,4 +205,4 @@ and the templates are all Apache-2.0, so plugins you build with it are yours,
 under whatever licence you choose, commercial or not.
 
 The ZetaForge app itself is licensed separately: see the
-[repository](https://github.com/zetaforge/zetaforge).
+[repository](https://github.com/zetawave/ZetaForge).

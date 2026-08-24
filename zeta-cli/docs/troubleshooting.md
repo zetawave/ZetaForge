@@ -86,4 +86,4 @@ notifies; the plugin has to be resumable. See [testing.md](testing.md).
 everything the Host and the runtime say, including the class loader trace.
 
 If the CLI itself crashes with an internal error, that is a bug — please open an
-issue with the output: https://github.com/zetaforge/zetaforge/issues
+issue with the output: https://github.com/zetawave/ZetaForge/issues

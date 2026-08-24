@@ -107,7 +107,7 @@ function validate(raw, file) {
       `This plugin requires Host API ${minHostApi}, but this CLI builds for Host API ${HOST_API_VERSION}.`,
       {
         where: file,
-        hint: `Install a newer CLI:  npm install -g zetaforge@${minHostApi}`,
+        hint: `Install a newer CLI:  npm install -g zetaforge-cli@${minHostApi}`,
         docs: "versioning.md",
       },
     );

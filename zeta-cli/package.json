@@ -1,5 +1,5 @@
 {
-  "name": "zetaforge",
+  "name": "zetaforge-cli",
   "version": "4.0.0",
   "description": "Create, build and test ZetaForge plugins: real Kotlin, real libraries, packaged as a single .zeta file.",
   "keywords": [
@@ -10,13 +10,13 @@
     "zetaforge",
     "cli"
   ],
-  "homepage": "https://github.com/zetaforge/zetaforge#readme",
+  "homepage": "https://github.com/zetawave/ZetaForge#readme",
   "bugs": {
-    "url": "https://github.com/zetaforge/zetaforge/issues"
+    "url": "https://github.com/zetawave/ZetaForge/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zetaforge/zetaforge.git",
+    "url": "git+https://github.com/zetawave/ZetaForge.git",
     "directory": "zeta-cli"
   },
   "license": "Apache-2.0",

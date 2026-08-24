@@ -32,11 +32,11 @@ export const paths = {
 
 /** Where the Host APK and other large artifacts are published. */
 export const RELEASES = {
-  repo: process.env.ZETA_REPO || "zetaforge/zetaforge",
+  repo: process.env.ZETA_REPO || "zetawave/ZetaForge",
   /** Overridable so you can point the CLI at a locally built Host. */
   hostApkUrl:
     process.env.ZETA_HOST_APK_URL ||
-    `https://github.com/${process.env.ZETA_REPO || "zetaforge/zetaforge"}/releases/download/v${pkg.version}/zetaforge-host-${pkg.version}.apk`,
+    `https://github.com/${process.env.ZETA_REPO || "zetawave/ZetaForge"}/releases/download/v${pkg.version}/zetaforge-host-${pkg.version}.apk`,
 };
 
 /** The Host application, as installed on a device. */

@@ -1,108 +1,133 @@
+<div align="center">
+
+<img src="zetaforge-doc/theme/logo.svg" width="72" height="72" alt="">
+
 # ZetaForge
 
-An Android app that loads plugins written in **real Kotlin**, compiled
-separately, shipped as a single `.zeta` file, with their own libraries — and a
-CLI that makes writing one take a minute.
+**An Android app that runs code it was never compiled against.**
+
+Write an ordinary Kotlin class, compile it on your machine, ship it as a single
+`.zeta` file. The app loads it at run time — with its own libraries, its own
+permissions, and its own screens.
+
+[**Documentation**](https://zetawave.github.io/ZetaForge/) ·
+[Quick start](https://zetawave.github.io/ZetaForge/quick-start/) ·
+[Architecture](https://zetawave.github.io/ZetaForge/architecture/) ·
+[Security model](https://zetawave.github.io/ZetaForge/security/)
+
+[![CI](https://github.com/zetawave/ZetaForge/actions/workflows/ci.yml/badge.svg)](https://github.com/zetawave/ZetaForge/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/zetaforge-cli?label=zetaforge-cli)](https://www.npmjs.com/package/zetaforge-cli)
+[![Docs](https://github.com/zetawave/ZetaForge/actions/workflows/docs.yml/badge.svg)](https://zetawave.github.io/ZetaForge/)
+
+</div>
+
+---
 
 ```bash
-npx zetaforge new weather
-cd weather
-npx zetaforge dev
+npm install -g zetaforge-cli
+zeta doctor
+zeta new weather && cd weather
+zeta dev
 ```
 
-A plugin is not a script and not a configuration file. It is a Kotlin class that
-receives the Host's `Context`, uses Retrofit or MediaCodec or anything else it
-bundles, and runs inside an app that never knew it existed.
+```kotlin
+class WeatherPlugin : ZetaPlugin {
+    override val id = "com.example.weather"
+    override val name = "Weather"
+    override val version = "1.0.0"
+
+    override suspend fun execute(context: Context, input: Bundle): PluginResult {
+        val city = input.getString("city") ?: "Rome"    // from the settings form
+        val degrees = api.forecast(city).temperature     // your own Retrofit
+        return PluginResult.Success("It is $degrees° in $city")
+    }
+}
+```
+
+That is a complete plugin. It carries its own Retrofit — a copy the app does not
+contain and has never seen — and it runs inside the app with the app's
+permissions.
+
+## Why it is not another scripting plugin system
+
+**Real Kotlin, real toolchain.** kotlinc and D8, producing the same DEX bytecode
+Android runs everywhere else. No interpreter, no transpilation, no language
+subset.
+
+**Its own libraries.** Retrofit, OkHttp, anything on Maven Central, compiled
+into the plugin's own DEX. Two plugins can even use different versions of the
+same library, because each gets its own class loader.
+
+**Its own permissions, with its own reasons.** Declared by the plugin, requested
+at the moment they are needed, re-checked on every run.
+
+**Its own screen.** A plugin can implement `ZetaUiPlugin` and return a
+composable, which the app draws in a container Activity of its own — a mini app
+inside the app.
+
+**Its own source, in the box.** Every `.zeta` carries the Kotlin that produced
+it, and the app can show it before you run it.
+
+## The trust boundary
+
+> A plugin runs **inside the host process, with the host's UID and permissions**.
+> There is no sandbox. Importing a `.zeta` is as consequential as installing an
+> app.
+
+That is what makes the system useful, and it is why the app says so plainly.
+[Security model →](https://zetawave.github.io/ZetaForge/security/)
+
+## Documentation
+
+Everything is at **<https://zetawave.github.io/ZetaForge/>**.
+
+| | |
+|---|---|
+| [Installation](https://zetawave.github.io/ZetaForge/installation/) | The CLI, the app, and a device |
+| [Quick start](https://zetawave.github.io/ZetaForge/quick-start/) | A plugin running in five minutes |
+| [Plugin anatomy](https://zetawave.github.io/ZetaForge/plugin-anatomy/) | The contract, and what you can do with it |
+| [Settings](https://zetawave.github.io/ZetaForge/settings/) · [Permissions](https://zetawave.github.io/ZetaForge/permissions/) · [Dependencies](https://zetawave.github.io/ZetaForge/dependencies/) | Declaring what a plugin needs |
+| [Scheduling](https://zetawave.github.io/ZetaForge/scheduling/) · [Screens](https://zetawave.github.io/ZetaForge/screens/) | Running on its own; having an interface |
+| [Architecture](https://zetawave.github.io/ZetaForge/architecture/) · [Class loading](https://zetawave.github.io/ZetaForge/class-loading/) | How it actually works |
+| [Limitations](https://zetawave.github.io/ZetaForge/limitations/) | What it does not do — worth reading first |
 
 ## This repository
 
 | | |
 |---|---|
-| **[app/](app/)** | the Android side: the Host, the runtime, the SDK contract, the plugin builder |
-| **[zeta-cli/](zeta-cli/)** | the `zetaforge` npm package: scaffold, build, test, run |
-| **[scripts/](scripts/)** | build, release and end-to-end scripts for this repository |
+| **[app/](app/)** | The Android side: the host app, the runtime, the SDK contract, the plugin builder |
+| **[zeta-cli/](zeta-cli/)** | The `zetaforge-cli` npm package: scaffold, build, test, run |
+| **[zetaforge-doc/](zetaforge-doc/)** | The documentation site — static HTML, no dependencies |
+| **[scripts/](scripts/)** | Build, release and end-to-end scripts |
 
 The two halves meet at one artifact: `zetaforge-api-<n>.jar`, the contract.
 `app/plugin-api` produces it and the npm package ships it, so the CLI and the
-app it targets are the same version by construction — no Maven publishing, and
-nothing to keep in sync by hand.
-
-## Writing a plugin
-
-Everything you need is **[zeta-cli/README.md](zeta-cli/README.md)** and
-[zeta-cli/docs/](zeta-cli/docs/): the contract, settings, permissions,
-dependencies, testing, distribution. None of this repository is required.
+app it targets are the same version by construction.
 
 ## Working on ZetaForge itself
 
 ```bash
-npm install                # workspace tooling
-npm run doctor             # check the machine
+git clone https://github.com/zetawave/ZetaForge.git
+cd ZetaForge
+npm install
+npm run doctor
 
-npm run build              # contract + Host (debug)
-npm run build:plugins      # the bundled plugins
-npm run test               # runtime unit tests + CLI tests
-npm run test:e2e           # scaffold, build, install and run, on a real device
-npm run test:device        # instrumented tests on a device
-
-npm run release:dry        # everything except publishing
-npm run release:patch      # 3.0.0 -> 3.0.1, published to npm and GitHub
+npm run build              # contract + host (debug)
+npm test                   # runtime unit tests + CLI tests
+npm run test:device        # instrumented tests, needs a device
 ```
 
-Gradle is still there and works directly from `app/`; the npm scripts are a thin
-layer so both halves have one entry point.
+Full detail:
+[Building from source](https://zetawave.github.io/ZetaForge/building-from-source/).
 
-### Releasing
+## Contributing
 
-`npm run release:<patch|minor|major>` does the whole thing: checks the tree and
-your credentials, bumps the version everywhere it appears, builds the contract
-and the Host, stages the CLI assets, runs the tests, packs and inspects the npm
-tarball, then commits, tags, pushes, publishes to npm and creates the GitHub
-release with the APK attached.
+Issues and pull requests are welcome. Please read
+[CONTRIBUTING.md](CONTRIBUTING.md) first — particularly the note about which
+licence applies to which directory.
 
-It refuses to start on a dirty tree, off `main`, or without npm and `gh`
-authenticated — a release that fails *after* the tag is pushed is far worse than
-one that never starts.
-
-**The major version is the Host API version.** `zetaforge@3` builds plugins for
-Host API 3, and the release script rejects a version whose major does not match
-`zetaforge.hostApiVersion` in [app/zetaforge.properties](app/zetaforge.properties).
-
-### Where the big files go
-
-npm carries only what is small — the CLI, the contract jar (48 KB) and the
-Gradle wrapper: 137 KB in total. The Host APK is 18 MB and goes to GitHub
-Releases, where `zeta host install` fetches it on demand and caches it under
-`~/.zetaforge/`.
-
-## How it works
-
-The Host extracts the plugin's DEX, loads it with a `DelegateLastClassLoader` so
-the plugin's own libraries win over the app's, finds the entry point class by
-name, instantiates it and calls `execute`.
-
-Four things must be *shared* rather than duplicated — the contract, the Kotlin
-standard library, coroutines, and Compose for a plugin that has a screen —
-because otherwise the Host could not even cast the plugin to `ZetaPlugin`.
-Everything else the plugin brings with it. The build parses the DEX it produced
-and refuses to package anything that breaks that rule, or that names an entry
-point which does not exist.
-
-A plugin can also *be* a screen rather than a job: it implements `ZetaUiPlugin`
-and supplies a composable, which the Host draws inside a container Activity of
-its own. An `Activity` shipped in a plugin could never be started — Android
-resolves components from an installed APK's manifest — and Compose needs no
-resources, so the package format does not change at all.
-[app/plugins/calculator/](app/plugins/calculator/) is the reference.
-
-The full account is in [app/README.md](app/README.md) and
-[app/docs/architecture.md](app/docs/architecture.md).
-
-## The trust boundary
-
-A plugin runs **inside the Host process, with the Host's UID and permissions**.
-It is a trust boundary, not a sandbox: importing a `.zeta` is as consequential
-as installing an app, and the app says so.
+For anything that changes behaviour, adds a dependency or touches the plugin
+contract, open an issue before writing code.
 
 ## Licensing
 
@@ -111,7 +136,16 @@ Two licences, on purpose — see [LICENSES.md](LICENSES.md):
 | | |
 |---|---|
 | [zeta-cli/](zeta-cli/) — CLI, contract, templates | **Apache-2.0** — build and sell plugins freely |
-| [app/](app/) — Host, runtime, builder | **PolyForm Strict 1.0.0** — not for resale or redistribution |
+| [app/](app/) — host, runtime, builder | **PolyForm Strict 1.0.0** — source-available; not for resale or redistribution |
 
 The line between them is the contract: what you build against is permissive,
 what runs it is not.
+
+> **Note** — PolyForm Strict is a source-available licence, not an OSI-approved
+> open source one. The repository is public and readable in full; that is not
+> the same thing, and it is stated here rather than implied.
+
+## Security
+
+Found a vulnerability? Please do not open a public issue — see
+[SECURITY.md](SECURITY.md).

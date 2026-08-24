@@ -76,7 +76,7 @@ jobs:
             Install the CLI:
 
             ```bash
-            npm install -g zetaforge@${{ steps.version.outputs.value }}
+            npm install -g zetaforge-cli@${{ steps.version.outputs.value }}
             zeta doctor
             zeta new my-plugin
             ```

@@ -18,6 +18,21 @@ jobs:
       - run: npm test --prefix zeta-cli
       - run: npm run lint --prefix zeta-cli
 
+  docs:
+    name: documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      # No install step: the site has no dependencies.
+      - name: Build the site
+        working-directory: zetaforge-doc
+        run: node build.mjs
+      - name: Check every internal link resolves
+        working-directory: zetaforge-doc
+        run: node scripts/check-links.mjs
+
   runtime:
     name: runtime and builder
     runs-on: ubuntu-latest
