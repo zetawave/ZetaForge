@@ -13,6 +13,7 @@ import com.zetaforge.app.notify.ZetaNotifications
 import com.zetaforge.app.schedule.ScheduleAlarms
 import com.zetaforge.app.service.PluginExecutionService
 import com.zetaforge.app.share.PluginPackages
+import com.zetaforge.app.update.AppUpdates
 import com.zetaforge.runtime.ImportResult
 import com.zetaforge.runtime.PluginEntry
 import com.zetaforge.runtime.UnloadOutcome
@@ -65,6 +66,7 @@ data class HostUiState(
     val route: Route = Route.PLUGINS,
     val onboarding: Boolean = false,
     val preferences: AppPreferences.Settings = AppPreferences.Settings(),
+    val update: UpdateState = UpdateState(),
 ) {
     val filteredLogs: List<ZetaLogRecord>
         get() = logs.filter { it.level.ordinal >= minLevel.ordinal }
@@ -94,6 +96,24 @@ data class HostUiState(
     fun scheduleOf(pluginId: String): Schedule = schedules[pluginId] ?: Schedule.manual(pluginId)
 
     /** Screens reachable from the menu. The plugin list is always the root. */
+    /**
+     * Where the app is in updating itself.
+     *
+     * [message] is only ever set by a check the user asked for. The automatic
+     * one stays silent unless it has something to offer: an app that reports
+     * "no network" every time it is opened is an app people stop reading.
+     */
+    data class UpdateState(
+        val checking: Boolean = false,
+        val available: AppUpdates.Update? = null,
+        val downloading: Boolean = false,
+        val progress: Float = 0f,
+        val downloaded: File? = null,
+        val message: String? = null,
+        /** Set when Android will not let the app install until the user allows it. */
+        val needsPermission: Boolean = false,
+    )
+
     enum class Route { PLUGINS, APP_SETTINGS, HELP, DIAGNOSTICS, ABOUT }
 
     /**
@@ -201,6 +221,10 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch { runtime.refresh() }
         refreshReadiness()
+
+        // Every launch, unless the user turned it off. Silent: it only speaks
+        // when there is something newer to install.
+        if (preferences.state.value.checkUpdatesOnLaunch) checkForUpdates(manual = false)
 
         // "Stop" in the notification asks the runtime to cancel; the job lives
         // here, so this is where the request is honoured.
@@ -459,6 +483,100 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
             }
             ui.value = ui.value.copy(details = null, banner = banner)
         }
+    }
+
+    // -- updating the app itself ---------------------------------------------
+
+    /**
+     * Asks GitHub whether a newer Host release exists.
+     *
+     * @param manual true when the user pressed the button, which is what
+     *   decides whether "you are up to date" and failures are worth showing.
+     */
+    fun checkForUpdates(manual: Boolean = true) {
+        if (ui.value.update.checking || ui.value.update.downloading) return
+        viewModelScope.launch {
+            ui.value = ui.value.copy(update = ui.value.update.copy(checking = true, message = null))
+            val result = AppUpdates.check()
+            ui.value = ui.value.copy(
+                update = when (result) {
+                    is AppUpdates.Result.Available -> HostUiState.UpdateState(available = result.update)
+
+                    AppUpdates.Result.UpToDate -> HostUiState.UpdateState(
+                        message = if (manual) string(R.string.update_up_to_date) else null,
+                    )
+
+                    is AppUpdates.Result.Failed -> HostUiState.UpdateState(
+                        message = if (manual) string(R.string.update_check_failed, result.reason) else null,
+                    )
+                },
+            )
+        }
+    }
+
+    /**
+     * Downloads the update, then asks to install it.
+     *
+     * Permission is checked before the download rather than after: making
+     * somebody wait for thirty megabytes only to be sent to Settings is a poor
+     * way to ask a question that could have been asked first.
+     */
+    fun downloadUpdate(install: (java.io.File) -> Unit) {
+        val update = ui.value.update.available ?: return
+        if (!AppUpdates.canInstall(getApplication())) {
+            ui.value = ui.value.copy(update = ui.value.update.copy(needsPermission = true))
+            return
+        }
+
+        viewModelScope.launch {
+            ui.value = ui.value.copy(
+                update = ui.value.update.copy(downloading = true, progress = 0f, message = null),
+            )
+            val result = AppUpdates.download(getApplication(), update) { progress ->
+                ui.value = ui.value.copy(update = ui.value.update.copy(progress = progress))
+            }
+            result.fold(
+                onSuccess = { file ->
+                    ui.value = ui.value.copy(
+                        update = ui.value.update.copy(downloading = false, downloaded = file),
+                    )
+                    install(file)
+                },
+                onFailure = { error ->
+                    ui.value = ui.value.copy(
+                        update = ui.value.update.copy(
+                            downloading = false,
+                            message = string(
+                                R.string.update_download_failed,
+                                error.message ?: error.javaClass.simpleName,
+                            ),
+                        ),
+                    )
+                },
+            )
+        }
+    }
+
+    /** Called once the user has been to Settings, to try the download again. */
+    fun onInstallPermissionResult(install: (java.io.File) -> Unit) {
+        ui.value = ui.value.copy(update = ui.value.update.copy(needsPermission = false))
+        if (AppUpdates.canInstall(getApplication())) downloadUpdate(install)
+    }
+
+    fun dismissInstallPermission() {
+        ui.value = ui.value.copy(update = ui.value.update.copy(needsPermission = false))
+    }
+
+    /** The session could not even be created; the user never saw a dialog. */
+    fun onInstallFailed(reason: String) {
+        ui.value = ui.value.copy(
+            update = ui.value.update.copy(message = string(R.string.update_download_failed, reason)),
+        )
+    }
+
+    /** Puts the update card away until the next check. */
+    fun dismissUpdate() {
+        ui.value = ui.value.copy(update = HostUiState.UpdateState())
     }
 
     // -- getting a package back out ------------------------------------------

@@ -332,5 +332,23 @@
     <string name="screen_crashed_body">%1$s ha sollevato un\'eccezione: la schermata è stata chiusa e il plugin scaricato. ZetaForge non ne è stata toccata.</string>
     <string name="screen_permission_intro">A %1$s servono questi permessi:</string>
     <string name="screen_special_access_body">Va attivato nelle impostazioni di Android.</string>
+
+    <!-- Aggiornamento dell'app -->
+    <string name="update_title">Aggiornamento disponibile</string>
+    <string name="update_subtitle">ZetaForge %1$s · %2$s</string>
+    <string name="update_action_download">Scarica e installa</string>
+    <string name="update_action_check">Controlla aggiornamenti</string>
+    <string name="update_checking">Controllo in corso…</string>
+    <string name="update_downloading">Download %1$d%%</string>
+    <string name="update_up_to_date">ZetaForge è aggiornata</string>
+    <string name="update_check_failed">Impossibile controllare gli aggiornamenti: %1$s</string>
+    <string name="update_download_failed">Download fallito: %1$s</string>
+    <string name="update_api_warning">Questo aggiornamento cambia l\'API Host. I plugin creati per quella attuale potrebbero non caricarsi più finché non vengono ricompilati.</string>
+    <string name="update_permission_title">Consenti l\'installazione di app</string>
+    <string name="update_permission_body">Android chiede il tuo permesso prima che ZetaForge possa installare un aggiornamento. Si aprono le Impostazioni, dove autorizzi questa app a installare app sconosciute.</string>
+    <string name="update_permission_open">Apri Impostazioni</string>
+    <string name="app_settings_updates">Aggiornamenti</string>
+    <string name="app_settings_check_updates">Controlla a ogni avvio</string>
+    <string name="app_settings_check_updates_help">Chiede a GitHub se esiste una release più recente. Non viene inviato nulla: la repository è pubblica e il controllo si limita a leggere.</string>
 </resources>
 

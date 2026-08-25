@@ -28,6 +28,8 @@ class AppPreferences(context: Context) {
         /** Whether a manually started run also notifies when it ends. */
         val notifyManualResults: Boolean = true,
         val onboardingDone: Boolean = false,
+        /** Whether the app asks GitHub for a newer release when it starts. */
+        val checkUpdatesOnLaunch: Boolean = true,
     )
 
     enum class Theme { SYSTEM, LIGHT, DARK }
@@ -37,6 +39,7 @@ class AppPreferences(context: Context) {
         minLogLevel = enumOf(prefs.getString(KEY_LOG_LEVEL, null), ZetaLogLevel.DEBUG),
         notifyManualResults = prefs.getBoolean(KEY_NOTIFY_MANUAL, true),
         onboardingDone = prefs.getBoolean(KEY_ONBOARDING, false),
+        checkUpdatesOnLaunch = prefs.getBoolean(KEY_CHECK_UPDATES, true),
     )
 
     fun setTheme(theme: Theme) = update { putString(KEY_THEME, theme.name) }
@@ -46,6 +49,8 @@ class AppPreferences(context: Context) {
     fun setNotifyManualResults(enabled: Boolean) = update { putBoolean(KEY_NOTIFY_MANUAL, enabled) }
 
     fun setOnboardingDone(done: Boolean) = update { putBoolean(KEY_ONBOARDING, done) }
+
+    fun setCheckUpdatesOnLaunch(enabled: Boolean) = update { putBoolean(KEY_CHECK_UPDATES, enabled) }
 
     private inline fun update(block: SharedPreferences.Editor.() -> Unit) {
         prefs.edit().apply(block).apply()
@@ -61,5 +66,6 @@ class AppPreferences(context: Context) {
         const val KEY_LOG_LEVEL = "logLevel"
         const val KEY_NOTIFY_MANUAL = "notifyManualResults"
         const val KEY_ONBOARDING = "onboardingDone"
+        const val KEY_CHECK_UPDATES = "checkUpdatesOnLaunch"
     }
 }

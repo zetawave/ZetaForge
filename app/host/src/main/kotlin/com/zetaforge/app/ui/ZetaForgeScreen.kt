@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.zetaforge.app.R
 import com.zetaforge.app.ui.components.CodeViewerDialog
+import com.zetaforge.app.ui.components.InstallPermissionDialog
 import com.zetaforge.app.ui.components.LogConsole
 import com.zetaforge.app.ui.components.PermissionBlockedDialog
 import com.zetaforge.app.ui.components.PermissionRequestDialog
@@ -79,6 +80,7 @@ import com.zetaforge.app.ui.components.ReadinessPanel
 import com.zetaforge.app.ui.components.ScheduleDialog
 import com.zetaforge.app.ui.components.SectionHeader
 import com.zetaforge.app.ui.components.SpecialAccessDialog
+import com.zetaforge.app.ui.components.UpdateCard
 import com.zetaforge.app.ui.components.ZetaLogo
 import com.zetaforge.app.ui.screens.AboutScreen
 import com.zetaforge.app.ui.screens.AppSettingsScreen
@@ -127,6 +129,12 @@ data class HostActions(
     val onScheduleSave: () -> Unit,
     val onScheduleClose: () -> Unit,
     val onFixReadiness: (ReadinessItem.Fix) -> Unit,
+    val onCheckUpdates: () -> Unit,
+    val onDownloadUpdate: () -> Unit,
+    val onDismissUpdate: () -> Unit,
+    val onOpenInstallSettings: () -> Unit,
+    val onDismissInstallPermission: () -> Unit,
+    val onCheckUpdatesOnLaunch: (Boolean) -> Unit,
     val onNavigate: (HostUiState.Route) -> Unit,
     val onBack: () -> Unit,
     val onFinishOnboarding: () -> Unit,
@@ -175,13 +183,17 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
                         onTheme = actions.onTheme,
                         onLogLevel = actions.onLevelChange,
                         onNotifyResults = actions.onNotifyResults,
+                        onCheckUpdatesOnLaunch = actions.onCheckUpdatesOnLaunch,
                         onReplayOnboarding = actions.onReplayOnboarding,
                         onClearLogs = actions.onClearLogs,
                     )
 
                     HostUiState.Route.HELP -> HelpScreen()
                     HostUiState.Route.DIAGNOSTICS -> DiagnosticsScreen(state, actions.onFixReadiness)
-                    HostUiState.Route.ABOUT -> AboutScreen()
+                    HostUiState.Route.ABOUT -> AboutScreen(
+                        update = state.update,
+                        onCheckUpdates = actions.onCheckUpdates,
+                    )
                     HostUiState.Route.PLUGINS -> Unit
                 }
             }
@@ -320,6 +332,13 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
         )
     }
 
+    if (state.update.needsPermission) {
+        InstallPermissionDialog(
+            onOpenSettings = actions.onOpenInstallSettings,
+            onDismiss = actions.onDismissInstallPermission,
+        )
+    }
+
     state.blockedDialog?.let { blocked ->
         PermissionBlockedDialog(
             title = stringResource(blocked.titleRes),
@@ -352,6 +371,10 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
 
         state.banner?.let { banner ->
             item { BannerCard(banner, actions.onDismissBanner) }
+        }
+
+        if (state.update.available != null) {
+            item { UpdateCard(state.update, actions.onDownloadUpdate, actions.onDismissUpdate) }
         }
 
         // Only once something is actually scheduled: before that, asking for

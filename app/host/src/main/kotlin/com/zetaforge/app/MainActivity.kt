@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zetaforge.app.permission.ActivityPermissionGateway
 import com.zetaforge.app.ui.AppPreferences
 import com.zetaforge.app.share.PluginPackages
+import com.zetaforge.app.update.AppUpdates
 import com.zetaforge.app.ui.HostActions
 import com.zetaforge.app.ui.HostViewModel
 import com.zetaforge.app.ui.ReadinessItem
@@ -55,6 +56,17 @@ class MainActivity : ComponentActivity() {
     /** Key of the folder setting waiting for the picker to come back. */
     private var pendingFolderSetting: String? = null
 
+    /**
+     * Back from the "install unknown apps" page in Settings.
+     *
+     * There is no result to read - the switch is the answer - so the state is
+     * asked for again, and the download resumes if it was allowed.
+     */
+    private val installPermission =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            viewModel.onInstallPermissionResult(::installUpdate)
+        }
+
     /** Plugin whose package is waiting for an export destination. */
     private var pendingExportPlugin: String? = null
 
@@ -88,6 +100,19 @@ class MainActivity : ComponentActivity() {
             }
             viewModel.updateSetting(key, uri.toString())
         }
+
+    /**
+     * Hands a downloaded update to the system package installer.
+     *
+     * From here on it is Android's dialog, not ours: it shows what is being
+     * replaced and asks for confirmation, which is exactly the guarantee that
+     * makes self-updating acceptable in the first place.
+     */
+    private fun installUpdate(apk: java.io.File) {
+        AppUpdates.install(this, apk).onFailure { error ->
+            viewModel.onInstallFailed(error.message ?: error.javaClass.simpleName)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Installed before super.onCreate, as the API requires: it replaces the
@@ -139,6 +164,15 @@ class MainActivity : ComponentActivity() {
                                 packageExportPicker.launch(name)
                             }
                         },
+                        onCheckUpdates = { viewModel.checkForUpdates(manual = true) },
+                        onDownloadUpdate = { viewModel.downloadUpdate(::installUpdate) },
+                        onDismissUpdate = viewModel::dismissUpdate,
+                        onOpenInstallSettings = {
+                            viewModel.dismissInstallPermission()
+                            installPermission.launch(AppUpdates.unknownSourcesSettings(this@MainActivity))
+                        },
+                        onDismissInstallPermission = viewModel::dismissInstallPermission,
+                        onCheckUpdatesOnLaunch = viewModel.preferences::setCheckUpdatesOnLaunch,
                         onUnload = { viewModel.unload(it.id) },
                         onUninstall = { viewModel.uninstall(it.id) },
                         onLevelChange = viewModel::setMinLevel,
