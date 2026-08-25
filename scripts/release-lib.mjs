@@ -70,9 +70,11 @@ export function requireMajorMatchesHostApi(version, what) {
 export function writeProperty(file, key, value) {
   const before = fs.readFileSync(file, "utf8");
   const pattern = new RegExp(`^${key.replace(/\./g, "\\.")}=.*$`, "m");
-  const updated = before.replace(pattern, `${key}=${value}`);
-  if (updated === before) fail(`${key} not found in ${file}`);
-  fs.writeFileSync(file, updated);
+  // Tested rather than inferred from the result: re-releasing the same version
+  // writes the value that is already there, and "nothing changed" must not be
+  // mistaken for "the key is missing".
+  if (!pattern.test(before)) fail(`${key} not found in ${file}`);
+  fs.writeFileSync(file, before.replace(pattern, `${key}=${value}`));
   return () => fs.writeFileSync(file, before);
 }
 

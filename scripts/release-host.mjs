@@ -29,10 +29,11 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import {
-  root, app, banner, bump, commitAndTag, confirm, fail, gradle, hostApiVersion, hostVersion, info,
-  ok, parseArgs, preflight, readProperty, requireCommand, requireMajorMatchesHostApi, run, step,
-  tagIsOnHead, tagExists, warn, writeProperty, spawnTool,
+  root, app, banner, bump, commitAndTag, confirm, fail, gradle, hostVersion, info,
+  ok, parseArgs, preflight, readProperty, requireMajorMatchesHostApi, step,
+  tagIsOnHead, tagExists, warn, writeProperty,
 } from "./release-lib.mjs";
+import { createRelease, releaseExists, requireGitHubAccess } from "./github.mjs";
 
 const ABIS = ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"];
 
@@ -50,12 +51,10 @@ async function main() {
   // ---- 1. preflight ------------------------------------------------------
   step("checking the working tree");
   preflight({ dryRun, force: args.force });
-  if (!dryRun) {
-    requireCommand("gh", ["--version"], "The GitHub CLI creates the release. Install it, then: gh auth login");
-    if (spawnTool("gh", ["auth", "status"], { capture: true }).status !== 0) {
-      fail("gh is not authenticated.", "Run: gh auth login");
-    }
-  }
+  // Established before anything is built or tagged: finding out there is no way
+  // to upload the result *after* pushing the tag is the failure this script is
+  // written to avoid.
+  if (!dryRun) info(`GitHub access: ${requireGitHubAccess()}`);
 
   const properties = path.join(app, "zetaforge.properties");
   const current = hostVersion();
@@ -73,7 +72,7 @@ async function main() {
       `    git tag -d ${tag} && git push --delete origin ${tag}`,
     );
   }
-  if (!dryRun && releaseExists(tag)) {
+  if (!dryRun && (await releaseExists(tag))) {
     fail(`${tag} is already published on GitHub.`, "Bump the version: a release is published once.");
   }
 
@@ -126,10 +125,10 @@ async function main() {
   }
 
   step("creating the GitHub release");
-  createRelease(tag, version, api, staged);
+  const url = await publish(tag, version, api, staged);
 
   ok(`released Host ${version}`);
-  console.log(`    apk      https://github.com/zetawave/ZetaForge/releases/tag/${tag}`);
+  console.log(`    apk      ${url}`);
   console.log(`    install  zeta host install --force\n`);
 }
 
@@ -203,11 +202,7 @@ function sha256(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
-function releaseExists(tag) {
-  return spawnTool("gh", ["release", "view", tag], { capture: true }).status === 0;
-}
-
-function createRelease(tag, version, api, files) {
+async function publish(tag, version, api, files) {
   const notes = [
     `ZetaForge Host ${version} (Host API ${api}).`,
     "",
@@ -223,10 +218,5 @@ function createRelease(tag, version, api, files) {
     "```",
   ].join("\n");
 
-  run("gh", [
-    "release", "create", tag,
-    ...files,
-    "--title", `Host ${version}`,
-    "--notes", notes,
-  ]);
+  return createRelease({ tag, name: `Host ${version}`, notes, files });
 }
