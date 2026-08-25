@@ -26,18 +26,41 @@ export const paths = {
   contractJar: path.join(CLI_ROOT, "assets", `zetaforge-api-${HOST_API_VERSION}.jar`),
   gradleRecipe: path.join(CLI_ROOT, "assets", "gradle"),
   cache: CACHE_DIR,
-  hostApk: path.join(CACHE_DIR, "host", `zetaforge-${pkg.version}.apk`),
+  hostApkDir: path.join(CACHE_DIR, "host"),
   jdk: path.join(CACHE_DIR, "jdk"),
 };
 
-/** Where the Host APK and other large artifacts are published. */
+/** Where a downloaded Host APK is cached, named after the Host's own version. */
+export function hostApkPath(hostVersion) {
+  return path.join(paths.hostApkDir, `zetaforge-${hostVersion}.apk`);
+}
+
+/**
+ * Where the Host APK and other large artifacts are published.
+ *
+ * The Host and the CLI are released separately and their minor and patch
+ * numbers drift apart, so the APK is found by asking which Host releases exist
+ * for this Host API version - never by assuming it carries the CLI's own
+ * version number. Only the major is shared, and only the major means anything.
+ */
 export const RELEASES = {
   repo: process.env.ZETA_REPO || "zetawave/ZetaForge",
-  /** Overridable so you can point the CLI at a locally built Host. */
-  hostApkUrl:
-    process.env.ZETA_HOST_APK_URL ||
-    `https://github.com/${process.env.ZETA_REPO || "zetawave/ZetaForge"}/releases/download/v${pkg.version}/zetaforge-host-${pkg.version}.apk`,
+  /** Tag prefix of the Host release train. See docs/versioning.md. */
+  hostTagPrefix: "host-v",
+  /** Set to point the CLI at one specific APK, local build included. */
+  hostApkUrlOverride: process.env.ZETA_HOST_APK_URL || null,
 };
+
+/**
+ * Assets a Host release publishes, by name.
+ *
+ * `debug` is what `zeta host install` fetches: importing a plugin from the CLI
+ * goes through `run-as`, which only a debuggable build allows. The release
+ * builds are the ones to hand to somebody who just wants to run the app.
+ */
+export function hostAssetName(hostVersion, kind = "debug") {
+  return `zetaforge-host-${hostVersion}-${kind}.apk`;
+}
 
 /** The Host application, as installed on a device. */
 export const HOST = {

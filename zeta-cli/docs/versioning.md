@@ -18,9 +18,15 @@ npx zetaforge-cli@4 build           # same, without installing
 ```
 
 This is why the contract jar ships inside the npm package rather than being
-resolved from a repository: the jar and the Host that implements it come out of
-the same build, so they cannot drift apart, and there is no second version
-number for you to keep in sync.
+resolved from a repository: you install one thing, and it already carries the
+contract it builds against.
+
+The app and the CLI are released separately and their minor and patch numbers
+drift apart - CLI 4.3.1 is the right partner for Host 4.1.0 - so never read
+anything into the two matching or not matching below the major. The major is the
+whole agreement. `zeta host install` acts on exactly that: it asks which Host
+releases exist for this Host API version and downloads the newest, rather than
+assuming the app carries the CLI’s own version number.
 
 ## What a plugin declares
 

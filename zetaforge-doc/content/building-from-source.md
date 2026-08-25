@@ -65,7 +65,7 @@ node scripts/gradle.mjs :host:assembleDebug
 ### Installing what you built
 
 ```bash
-adb install -r app/host/build/outputs/apk/debug/host-debug.apk
+adb install -r app/host/build/outputs/apk/debug/host-universal-debug.apk
 ```
 
 `assembleDebug` is finalised by a verification task that fails the build if
@@ -173,23 +173,52 @@ zetaforge.minSdk=26
 zetaforge.versionName=4.0.0
 ```
 
-Changing a value there propagates to every module. The release script refuses to
-publish if the npm major version and `hostApiVersion` disagree.
+Changing a value there propagates to every module. `versionName` and
+`versionCode` are written by the Host release script; you do not edit them by
+hand. Both release scripts refuse to publish if their major and
+`hostApiVersion` disagree.
 
 ## Releasing
 
+The app and the CLI ship separately, so a fix to one is not a release of the
+other. Each has its own command, its own tag and its own version:
+
 ```bash
-npm run release:dry        # everything except commit, tag and publish
-npm run release:patch      # 4.0.0 → 4.0.1
-npm run release:minor      # 4.0.0 → 4.1.0
-npm run release:major      # 4.0.0 → 5.0.0 — a new Host API
+npm run release:host:patch    # the Android app  -> tag host-v4.0.1
+npm run release:cli:patch     # the zeta CLI     -> tag cli-v4.2.1, npm publish
+npm run release:docs          # this site
 ```
 
-The script refuses to start on a dirty tree, on the wrong branch, or without
-working npm credentials — because the worst release is one that fails after the
-tag has been pushed. It bumps every file carrying a version, builds, tests,
-inspects the npm tarball, commits, tags, pushes, publishes and creates the
-GitHub release with the APK attached.
+`:minor` and `:major` exist for both, and `:dry` does everything except tagging
+and publishing. Pass the bump as an argument instead if you prefer:
+`npm run release:host -- --bump minor`.
+
+The two versions drift apart on purpose. What they must always share is the
+**major**, because the major *is* the Host API version: a plugin built by CLI
+4.x runs on Host 4.x and on nothing else. Both scripts refuse to release a major
+that does not equal `zetaforge.hostApiVersion`, which you raise by hand — and
+only when the contract in `app/plugin-api` really changed.
+
+Both refuse to start on a dirty tree, on the wrong branch, or without the
+credentials they will need at the end, because the worst release is one that
+fails after the tag has been pushed.
+
+### What a Host release publishes
+
+```
+zetaforge-host-<v>-universal.apk     signed release build, every ABI
+zetaforge-host-<v>-<abi>.apk         signed release build, one architecture
+zetaforge-host-<v>-debug.apk         debuggable build, for the CLI
+SHA256SUMS.txt
+```
+
+Take the universal one unless you know your device's architecture. The debug
+build is published because `zeta install` hands packages to the app through
+`run-as`, which Android allows only for a debuggable build — it is what
+`zeta host install` downloads.
+
+The APKs are built and uploaded from the releaser's machine rather than from CI,
+because they are signed with a keystore that never leaves it.
 
 ## Next
 

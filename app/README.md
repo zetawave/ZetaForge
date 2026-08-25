@@ -153,7 +153,7 @@ If the SDK is missing pieces, install them from the CLI:
 
 ```bash
 ./gradlew :host:assembleDebug
-adb install -r host/build/outputs/apk/debug/host-debug.apk
+adb install -r host/build/outputs/apk/debug/host-universal-debug.apk
 ```
 
 or:
@@ -431,7 +431,7 @@ Automated, and wired into the Host build:
 
 ```
 ZetaForge Host APK verification
-apk      : host/build/outputs/apk/debug/host-debug.apk
+apk      : host/build/outputs/apk/debug/host-universal-debug.apk
 forbidden: Lretrofit2/, Lokhttp3/, Lokio/
 result   : PASS - no plugin-only library found in the Host APK
 ```
@@ -1134,8 +1134,8 @@ Then:
 
 ```bash
 ./gradlew :host:assembleRelease
-# -> host/build/outputs/apk/release/host-release.apk   (~1.9 MB, signed v2+v3)
-"$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs -v     host/build/outputs/apk/release/host-release.apk
+# -> host/build/outputs/apk/release/host-universal-release.apk   (~1.9 MB, signed v2+v3)
+"$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs -v     host/build/outputs/apk/release/host-universal-release.apk
 ```
 
 Without `keystore.properties` the release build still runs and produces an
@@ -1185,8 +1185,8 @@ Where the raw Gradle outputs live, if you want them directly:
 
 | Artifact | Command | Path |
 |---|---|---|
-| Host APK (release) | `./gradlew :host:assembleRelease` | `host/build/outputs/apk/release/host-release.apk` |
-| Host APK (debug) | `./gradlew :host:assembleDebug` | `host/build/outputs/apk/debug/host-debug.apk` |
+| Host APK (release) | `./gradlew :host:assembleRelease` | `host/build/outputs/apk/release/host-universal-release.apk` |
+| Host APK (debug) | `./gradlew :host:assembleDebug` | `host/build/outputs/apk/debug/host-universal-debug.apk` |
 | Plugin package | `./gradlew :plugins:retrofit-demo:buildZetaPlugin` | `plugins/retrofit-demo/build/zetaforge/retrofit-demo.zeta` |
 
 ### Single-purpose scripts

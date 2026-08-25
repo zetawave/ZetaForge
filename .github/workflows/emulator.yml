@@ -13,8 +13,10 @@ on:
   schedule:
     # Monday, early. Nobody is waiting for it.
     - cron: "0 4 * * 1"
+  # Both release trains: the end-to-end proof is the only thing that exercises
+  # a Host and a CLI together, so it runs whichever of the two just shipped.
   push:
-    tags: ["v*"]
+    tags: ["host-v*", "cli-v*"]
   workflow_dispatch:
 
 concurrency:
@@ -75,7 +77,7 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            node zeta-cli/bin/zeta.js host install --apk app/host/build/outputs/apk/debug/host-debug.apk
+            node zeta-cli/bin/zeta.js host install --apk app/host/build/outputs/apk/debug/host-universal-debug.apk
             node zeta-cli/bin/zeta.js new ci-plugin --author CI
             cd ci-plugin
             node ../zeta-cli/bin/zeta.js build

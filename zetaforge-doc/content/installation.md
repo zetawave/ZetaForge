@@ -90,11 +90,18 @@ zeta host version
 
 ### By hand
 
-Download `zetaforge-host-<version>.apk` from the
-[releases page](https://github.com/zetawave/ZetaForge/releases) and:
+Take a `host-v*` release from the
+[releases page](https://github.com/zetawave/ZetaForge/releases). Each one
+publishes several APKs:
+
+| File | When to take it |
+|---|---|
+| `zetaforge-host-<v>-universal.apk` | anything. Take this one if unsure. |
+| `zetaforge-host-<v>-<abi>.apk` | one architecture only, a few tens of KB smaller |
+| `zetaforge-host-<v>-debug.apk` | building plugins: `zeta install` needs a debuggable app |
 
 ```bash
-adb install -r zetaforge-host-4.0.0.apk
+adb install -r zetaforge-host-4.0.0-universal.apk
 ```
 
 Or copy it to the phone and open it — Android will ask you to allow installs

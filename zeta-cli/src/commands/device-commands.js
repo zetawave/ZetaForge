@@ -9,7 +9,8 @@ import path from "node:path";
 import https from "node:https";
 import { ui, duration, bytes } from "../ui.js";
 import { ZetaError } from "../errors.js";
-import { paths, HOST, RELEASES, pkg, PROJECT } from "../config.js";
+import { paths, HOST, pkg, PROJECT, hostApkPath } from "../config.js";
+import { resolveHostRelease } from "../host-release.js";
 import { resolveDevice, listDevices, findAdb } from "../env/android.js";
 import { loadProject } from "../project/manifest.js";
 import {
@@ -261,15 +262,27 @@ export async function host(options, args) {
   return 0;
 }
 
-/** Downloads the Host APK once and caches it. Too big for npm; lives in Releases. */
+/**
+ * Downloads the Host APK once and caches it. Too big for npm; lives in Releases.
+ *
+ * Which APK that is comes from the release list rather than from this package's
+ * version - the two are released apart - so the cache is keyed by the Host
+ * version that was actually resolved.
+ */
 export async function ensureHostApk() {
-  if (fs.existsSync(paths.hostApk)) return paths.hostApk;
+  ui.step("looking up the Host release");
+  const release = await resolveHostRelease("debug");
+  const destination = hostApkPath(release.version);
+  if (fs.existsSync(destination)) {
+    ui.done("cached", `ZetaForge ${release.version}`);
+    return destination;
+  }
 
-  fs.mkdirSync(path.dirname(paths.hostApk), { recursive: true });
-  ui.step(`downloading ZetaForge ${pkg.version}`);
-  await download(RELEASES.hostApkUrl, paths.hostApk);
-  ui.done("downloaded", bytes(fs.statSync(paths.hostApk).size));
-  return paths.hostApk;
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  ui.step(`downloading ZetaForge ${release.version}`);
+  await download(release.apkUrl, destination);
+  ui.done("downloaded", bytes(fs.statSync(destination).size));
+  return destination;
 }
 
 function download(url, destination, redirects = 0) {

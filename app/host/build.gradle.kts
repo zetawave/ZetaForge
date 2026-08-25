@@ -23,6 +23,13 @@ plugins {
  * is absent, debug builds keep working and `assembleRelease` produces an
  * unsigned APK instead of failing at configuration time.
  */
+/**
+ * The architectures a split is produced for, in the order their versionCode
+ * offsets are assigned. Never reorder: an offset that moves would make a new
+ * release look older than the one it replaces.
+ */
+val ABI_FILTERS = listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.isFile) {
@@ -94,6 +101,43 @@ android {
 
     packaging {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}")
+    }
+
+    /**
+     * One APK per ABI, plus a universal one that carries them all.
+     *
+     * The Host itself is pure Kotlin; the only native code in the package comes
+     * from a dependency (`libandroidx.graphics.path.so`, about 10 KB per ABI).
+     * Splitting therefore saves very little - see the release notes the build
+     * prints - and the universal APK stays the one to hand to somebody who does
+     * not know their device's architecture.
+     */
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include(*ABI_FILTERS.toTypedArray())
+            isUniversalApk = true
+        }
+    }
+}
+
+/**
+ * A distinct versionCode per ABI, following Google's recipe: the universal APK
+ * keeps the base code and each split sits above it, so a device offered both
+ * prefers the one built for it. Without this every split would carry the same
+ * code and Android would refuse to update one with another.
+ */
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            val abi = output.filters
+                .firstOrNull { it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI }
+                ?.identifier
+            val offset = ABI_FILTERS.indexOf(abi) + 1
+            val base = (rootProject.extra["zetaforge.versionCode"] as String).toInt()
+            output.versionCode.set(offset * 1_000_000 + base)
+        }
     }
 }
 

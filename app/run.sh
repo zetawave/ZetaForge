@@ -30,7 +30,7 @@ export MSYS2_ARG_CONV_EXCL='*'
 
 HOST_MODULE=":host"
 PLUGIN_NAME="retrofit-demo"
-HOST_APK="host/build/outputs/apk/debug/host-debug.apk"
+HOST_APK="host/build/outputs/apk/debug/host-universal-debug.apk"
 HOST_PACKAGE="com.zetaforge.app"
 MAIN_ACTIVITY="$HOST_PACKAGE/.MainActivity"
 DEVICE_TMP="/data/local/tmp/zetaforge-import.zeta"

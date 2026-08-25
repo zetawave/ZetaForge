@@ -1,0 +1,96 @@
+name: Release (CLI)
+
+# Triggered by the tag `npm run release:cli` pushes at the end.
+#
+# npm is published by the release script itself, from the credentials of whoever
+# is releasing. This workflow does the half that needs a build environment
+# rather than a secret: it rebuilds the contract jar on a clean machine, proves
+# the published tarball would contain it, and attaches it to a GitHub release.
+#
+# The Host APK is not here. It ships on its own train - see release-host.yml and
+# the `host-v*` tags - because it is signed with a key that never leaves the
+# releaser's machine.
+
+on:
+  push:
+    tags: ["cli-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Read the version from the tag
+        id: version
+        run: echo "value=${GITHUB_REF_NAME#cli-v}" >> "$GITHUB_OUTPUT"
+
+      - name: The tag and the package must agree
+        run: |
+          PKG=$(node -p "require('./zeta-cli/package.json').version")
+          if [ "$PKG" != "${{ steps.version.outputs.value }}" ]; then
+            echo "Tag ${{ steps.version.outputs.value }} does not match package version $PKG"
+            exit 1
+          fi
+
+      # The CLI ships the contract for its own major, and the major IS the Host
+      # API version. A mismatch here means a plugin scaffolded by this CLI would
+      # be built against the wrong contract.
+      - name: The major and the Host API version must agree
+        run: |
+          MAJOR=${{ steps.version.outputs.value }}
+          MAJOR=${MAJOR%%.*}
+          API=$(grep '^zetaforge.hostApiVersion=' app/zetaforge.properties | cut -d= -f2 | tr -d '[:space:]')
+          if [ "$MAJOR" != "$API" ]; then
+            echo "CLI major $MAJOR does not match Host API $API"
+            exit 1
+          fi
+          echo "api=$API" >> "$GITHUB_ENV"
+
+      - name: Build the contract
+        run: node scripts/gradle.mjs :plugin-api:apiJar
+
+      - name: Stage the CLI assets
+        run: node scripts/sync-assets.mjs
+
+      - name: Test
+        run: |
+          npm ci
+          npm test --prefix zeta-cli
+          npm run lint --prefix zeta-cli
+
+      - name: Collect the release files
+        run: |
+          mkdir -p release
+          cp zeta-cli/assets/zetaforge-api-*.jar release/
+          (cd release && sha256sum * > SHA256SUMS.txt)
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          name: CLI ${{ steps.version.outputs.value }}
+          body: |
+            `zetaforge-cli` ${{ steps.version.outputs.value }} — built for Host API ${{ env.api }}.
+
+            ```bash
+            npm install -g zetaforge-cli@${{ steps.version.outputs.value }}
+            zeta doctor
+            zeta new my-plugin
+            ```
+
+            The app itself ships separately: `zeta host install` fetches the newest
+            `host-v${{ env.api }}.x.y` release for you.

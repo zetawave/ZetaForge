@@ -8,7 +8,7 @@ GRADLEW="$ROOT_DIR/gradlew"
 
 HOST_MODULE=":host"
 PLUGIN_MODULE=":plugins:retrofit-demo"
-HOST_APK="$ROOT_DIR/host/build/outputs/apk/debug/host-debug.apk"
+HOST_APK="$ROOT_DIR/host/build/outputs/apk/debug/host-universal-debug.apk"
 PLUGIN_ZETA="$ROOT_DIR/plugins/retrofit-demo/build/zetaforge/retrofit-demo.zeta"
 HOST_PACKAGE="com.zetaforge.app"
 PLUGIN_ID="com.zetaforge.plugins.retrofitdemo"
