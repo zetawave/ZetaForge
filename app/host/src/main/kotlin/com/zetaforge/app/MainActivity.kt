@@ -20,6 +20,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zetaforge.app.permission.ActivityPermissionGateway
 import com.zetaforge.app.ui.AppPreferences
+import com.zetaforge.app.share.PluginPackages
 import com.zetaforge.app.ui.HostActions
 import com.zetaforge.app.ui.HostViewModel
 import com.zetaforge.app.ui.ReadinessItem
@@ -53,6 +54,21 @@ class MainActivity : ComponentActivity() {
 
     /** Key of the folder setting waiting for the picker to come back. */
     private var pendingFolderSetting: String? = null
+
+    /** Plugin whose package is waiting for an export destination. */
+    private var pendingExportPlugin: String? = null
+
+    /**
+     * Only reached on versions that will not let the app write to Downloads on
+     * its own; everywhere else the export lands there without asking.
+     */
+    private val packageExportPicker =
+        registerForActivityResult(ActivityResultContracts.CreateDocument(PluginPackages.MIME_TYPE)) { uri ->
+            val pluginId = pendingExportPlugin ?: return@registerForActivityResult
+            pendingExportPlugin = null
+            if (uri == null) return@registerForActivityResult
+            viewModel.exportPackageTo(pluginId, uri)
+        }
 
     /**
      * Folder picker for `ZetaSetting.Folder`. The permission is taken
@@ -116,6 +132,13 @@ class MainActivity : ComponentActivity() {
                         onCloseCode = viewModel::closeCode,
                         onRunFailing = { viewModel.startFailing(it.id) },
                         onRunThrowing = { viewModel.startThrowing(it.id) },
+                        onShare = { entry -> viewModel.sharePackage(entry.id, ::startActivity) },
+                        onExport = { entry ->
+                            viewModel.exportPackage(entry.id) { name ->
+                                pendingExportPlugin = entry.id
+                                packageExportPicker.launch(name)
+                            }
+                        },
                         onUnload = { viewModel.unload(it.id) },
                         onUninstall = { viewModel.uninstall(it.id) },
                         onLevelChange = viewModel::setMinLevel,

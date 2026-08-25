@@ -21,7 +21,9 @@
     <string name="action_close">Chiudi</string>
     <string name="action_cancel">Annulla</string>
     <string name="action_continue">Continua</string>
-    <string name="action_unload">Scarica</string>
+    <string name="action_unload">Rimuovi dalla memoria</string>
+    <string name="action_share">Condividi</string>
+    <string name="action_export">Esporta</string>
     <string name="action_uninstall">Disinstalla</string>
     <string name="action_open_settings">Apri impostazioni</string>
     <string name="action_clear_logs">Pulisci i log</string>
@@ -55,6 +57,11 @@
     <string name="banner_import_unreadable">Importazione fallita: impossibile leggere il file selezionato</string>
     <string name="banner_import_missing">Importazione fallita: nessun file in %1$s</string>
     <string name="banner_uninstalled">Disinstallato %1$s</string>
+    <string name="banner_unloaded">%1$s rimosso dalla memoria</string>
+    <string name="banner_unload_not_loaded">%1$s non era in memoria</string>
+    <string name="banner_unload_screen_open">Chiudi prima la schermata di %1$s</string>
+    <string name="banner_exported">Salvato nei Download: %1$s</string>
+    <string name="banner_export_failed">Esportazione fallita: %1$s</string>
 
     <!-- Notifiche -->
     <string name="notification_channel_runs">Esecuzioni dei plugin</string>

@@ -103,7 +103,9 @@ zetaPlugin {
     }
 
     // Free-form capability tags, for future Host-side filtering.
-    capabilities.set(listOf("network.http"))
+    // "poc.failureScenarios": this plugin reads `baseUrl` and `throwOnPurpose`,
+    // so the Host may offer the buttons that make it fail on purpose.
+    capabilities.set(listOf("network.http", "poc.failureScenarios"))
 
     // Output file name: build/zetaforge/<name>.zeta
     archiveBaseName.set("retrofit-demo")

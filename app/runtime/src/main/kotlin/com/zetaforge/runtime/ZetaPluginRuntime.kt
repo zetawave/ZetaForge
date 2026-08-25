@@ -43,6 +43,25 @@ import kotlinx.coroutines.delay
 import java.io.InputStream
 
 /**
+ * Why a call to [ZetaPluginRuntime.unload] ended the way it did.
+ *
+ * Unloading is invisible by nature - nothing on screen has to change for it to
+ * have worked - so the caller is told which of the three things happened and
+ * can say so, instead of leaving the user to guess whether the button did
+ * anything at all.
+ */
+enum class UnloadOutcome {
+    /** The class loader and instance were dropped. */
+    UNLOADED,
+
+    /** Nothing to do: the plugin was not in memory. */
+    NOT_LOADED,
+
+    /** Refused: the plugin's screen is on display and still needs its classes. */
+    SCREEN_OPEN,
+}
+
+/**
  * One installed plugin as seen by the UI: what is on disk plus its live state.
  */
 data class PluginEntry(
@@ -477,16 +496,19 @@ class ZetaPluginRuntime(
      * them unresolvable. Callers that genuinely have to unload close the screen
      * first (see `closeOpenUi`).
      */
-    suspend fun unload(pluginId: String) {
+    suspend fun unload(pluginId: String): UnloadOutcome {
         if (ZetaUiSessions.isOpen(pluginId)) {
             logger.warn(SOURCE, pluginId, "Not unloading: the plugin's screen is open")
-            return
+            return UnloadOutcome.SCREEN_OPEN
         }
-        val plugin = mutex.withLock { loaded.remove(pluginId) } ?: return
+        val plugin = mutex.withLock { loaded.remove(pluginId) } ?: return UnloadOutcome.NOT_LOADED
         runCatching { plugin.instance.onUnload() }
             .onFailure { logger.warn(SOURCE, pluginId, "onUnload threw: ${it.message}") }
         logger.info(SOURCE, pluginId, "Unloaded")
-        updateState(pluginId, PluginState.STOPPED)
+        // The strategy describes a class loader that no longer exists. Leaving
+        // it on the entry would let the UI keep claiming the plugin is loaded.
+        updateState(pluginId, PluginState.STOPPED, clearLoaderStrategy = true)
+        return UnloadOutcome.UNLOADED
     }
 
     /** Removes a plugin from disk. */
@@ -594,12 +616,13 @@ class ZetaPluginRuntime(
         result: PluginResult? = null,
         loaderStrategy: String? = null,
         permissionPlan: PermissionPlan? = null,
+        clearLoaderStrategy: Boolean = false,
     ) {
         _plugins.value = _plugins.value.map { entry ->
             if (entry.id != pluginId) entry else entry.copy(
                 state = state,
                 lastResult = result ?: entry.lastResult,
-                loaderStrategy = loaderStrategy ?: entry.loaderStrategy,
+                loaderStrategy = if (clearLoaderStrategy) null else loaderStrategy ?: entry.loaderStrategy,
                 permissionPlan = permissionPlan ?: entry.permissionPlan,
             )
         }

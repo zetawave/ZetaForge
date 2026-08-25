@@ -1,6 +1,7 @@
 package com.zetaforge.app.ui
 
 import android.app.Application
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.annotation.StringRes
@@ -11,8 +12,10 @@ import com.zetaforge.app.ZetaForgeApp
 import com.zetaforge.app.notify.ZetaNotifications
 import com.zetaforge.app.schedule.ScheduleAlarms
 import com.zetaforge.app.service.PluginExecutionService
+import com.zetaforge.app.share.PluginPackages
 import com.zetaforge.runtime.ImportResult
 import com.zetaforge.runtime.PluginEntry
+import com.zetaforge.runtime.UnloadOutcome
 import com.zetaforge.runtime.ZetaPluginRuntime
 import com.zetaforge.runtime.log.ZetaLogRecord
 import com.zetaforge.runtime.permission.PermissionCoordinator
@@ -429,8 +432,115 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Dropping a plugin from memory changes nothing the user can see, so the
+     * outcome is reported explicitly: silence here is indistinguishable from a
+     * button that does not work.
+     */
     fun unload(pluginId: String) {
-        viewModelScope.launch { runtime.unload(pluginId) }
+        viewModelScope.launch {
+            val name = state.value.plugins.firstOrNull { it.id == pluginId }
+                ?.installed?.displayName ?: pluginId
+            val banner = when (runtime.unload(pluginId)) {
+                UnloadOutcome.UNLOADED -> HostUiState.Banner(
+                    string(R.string.banner_unloaded, name),
+                    HostUiState.Banner.Kind.INFO,
+                )
+
+                UnloadOutcome.NOT_LOADED -> HostUiState.Banner(
+                    string(R.string.banner_unload_not_loaded, name),
+                    HostUiState.Banner.Kind.INFO,
+                )
+
+                UnloadOutcome.SCREEN_OPEN -> HostUiState.Banner(
+                    string(R.string.banner_unload_screen_open, name),
+                    HostUiState.Banner.Kind.ERROR,
+                )
+            }
+            ui.value = ui.value.copy(details = null, banner = banner)
+        }
+    }
+
+    // -- getting a package back out ------------------------------------------
+
+    /**
+     * Hands the plugin's `.zeta` to another app.
+     *
+     * Staging the copy touches the disk, so it happens off the main thread and
+     * the chooser is launched only once there is a file to offer - otherwise a
+     * large package would freeze the frame the button was tapped on.
+     */
+    fun sharePackage(pluginId: String, launch: (Intent) -> Unit) {
+        val entry = state.value.plugins.firstOrNull { it.id == pluginId } ?: return
+        viewModelScope.launch {
+            val intent = withContext(Dispatchers.IO) {
+                runCatching { PluginPackages.shareIntent(getApplication(), entry.installed) }
+            }
+            intent.fold(
+                onSuccess = launch,
+                onFailure = { failure ->
+                    ui.value = ui.value.copy(
+                        banner = HostUiState.Banner(
+                            string(R.string.banner_export_failed, failure.message ?: failure.javaClass.simpleName),
+                            HostUiState.Banner.Kind.ERROR,
+                        ),
+                    )
+                },
+            )
+        }
+    }
+
+    /**
+     * Writes the plugin's `.zeta` into Downloads.
+     *
+     * Where Android will not allow that unasked, [pickDestination] is called
+     * with the file name to propose, and the answer comes back to
+     * [exportPackageTo].
+     */
+    fun exportPackage(pluginId: String, pickDestination: (String) -> Unit) {
+        val entry = state.value.plugins.firstOrNull { it.id == pluginId } ?: return
+        viewModelScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                PluginPackages.exportToDownloads(getApplication(), entry.installed)
+            }
+            if (outcome is PluginPackages.ExportOutcome.NeedsPicker) {
+                pickDestination(PluginPackages.fileName(entry.installed))
+                return@launch
+            }
+            // The banner is drawn behind the details sheet the button lives in,
+            // so the sheet gets out of the way - otherwise the confirmation is
+            // written somewhere nobody can see it.
+            ui.value = ui.value.copy(details = null, banner = exportBanner(outcome))
+        }
+    }
+
+    /** Completes an export the user gave a destination for. */
+    fun exportPackageTo(pluginId: String, destination: Uri) {
+        val entry = state.value.plugins.firstOrNull { it.id == pluginId } ?: return
+        viewModelScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                PluginPackages.exportTo(getApplication(), entry.installed, destination)
+            }
+            ui.value = ui.value.copy(details = null, banner = exportBanner(outcome))
+        }
+    }
+
+    private fun exportBanner(outcome: PluginPackages.ExportOutcome): HostUiState.Banner = when (outcome) {
+        is PluginPackages.ExportOutcome.Saved -> HostUiState.Banner(
+            string(R.string.banner_exported, outcome.displayName),
+            HostUiState.Banner.Kind.SUCCESS,
+        )
+
+        is PluginPackages.ExportOutcome.Failed -> HostUiState.Banner(
+            string(R.string.banner_export_failed, outcome.reason),
+            HostUiState.Banner.Kind.ERROR,
+        )
+
+        // Handled by the caller, which asks for a destination instead.
+        PluginPackages.ExportOutcome.NeedsPicker -> HostUiState.Banner(
+            string(R.string.banner_export_failed, "no destination"),
+            HostUiState.Banner.Kind.ERROR,
+        )
     }
 
     // -- settings ------------------------------------------------------------

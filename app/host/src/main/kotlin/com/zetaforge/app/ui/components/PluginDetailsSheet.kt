@@ -51,6 +51,8 @@ fun PluginDetailsSheet(
     onDismiss: () -> Unit,
     onRunFailing: () -> Unit,
     onRunThrowing: () -> Unit,
+    onShare: () -> Unit,
+    onExport: () -> Unit,
     onUnload: () -> Unit,
     onUninstall: () -> Unit,
     onViewCode: () -> Unit,
@@ -197,27 +199,45 @@ fun PluginDetailsSheet(
                 }
             }
 
-            DetailSection(stringResource(R.string.details_scenarios)) {
-                Text(
-                    stringResource(R.string.details_scenarios_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = onRunFailing, modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.details_scenario_unreachable), maxLines = 1)
-                    }
-                    OutlinedButton(onClick = onRunThrowing, modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.details_scenario_throw), maxLines = 1)
+            // Both buttons feed inputs (`baseUrl`, `throwOnPurpose`) that only a
+            // plugin written for the demo reads. Any other plugin ignores them
+            // and simply runs for real - a backup, a compression pass over the
+            // gallery - which is the opposite of what "failure scenario"
+            // promises. So they are offered only where they mean something.
+            if (manifest.capabilities.contains(CAPABILITY_FAILURE_SCENARIOS)) {
+                DetailSection(stringResource(R.string.details_scenarios)) {
+                    Text(
+                        stringResource(R.string.details_scenarios_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(onClick = onRunFailing, modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.details_scenario_unreachable), maxLines = 1)
+                        }
+                        OutlinedButton(onClick = onRunThrowing, modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.details_scenario_throw), maxLines = 1)
+                        }
                     }
                 }
             }
 
             HorizontalDivider()
+            // Getting the package back out, kept away from the destructive pair
+            // below so "Export" is never a mis-tap away from "Uninstall".
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.action_share).uppercase(), maxLines = 1)
+                }
+                OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.action_export).uppercase(), maxLines = 1)
+                }
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 TextButton(onClick = onUnload, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.action_unload).uppercase())
+                    Text(stringResource(R.string.action_unload).uppercase(), maxLines = 1)
                 }
                 TextButton(onClick = onUninstall, modifier = Modifier.weight(1f)) {
                     Text(stringResource(R.string.action_uninstall).uppercase())
@@ -263,3 +283,9 @@ private fun KeyValue(key: String, value: String) {
         )
     }
 }
+
+/**
+ * Capability tag a plugin declares to say it understands the demo's failure
+ * inputs, and so can be asked to fail on purpose.
+ */
+private const val CAPABILITY_FAILURE_SCENARIOS = "poc.failureScenarios"

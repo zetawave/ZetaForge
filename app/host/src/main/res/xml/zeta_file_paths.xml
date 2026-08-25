@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The only thing the Host ever hands to another app: a staged copy of a
+    plugin package, under cache/shared-packages. The install directory itself is
+    deliberately not exposed - a receiving app has no business reading a
+    plugin's extracted code, and the staged copy carries a meaningful file name
+    where the installed one is always "current.zeta".
+-->
+<paths>
+    <cache-path name="shared-packages" path="shared-packages/" />
+</paths>

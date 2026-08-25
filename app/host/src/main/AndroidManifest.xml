@@ -19,6 +19,21 @@
         android:usesCleartextTraffic="false"
         android:theme="@style/Theme.ZetaForge">
 
+        <!--
+            Sharing a .zeta means handing a file to an app that cannot read this
+            one's storage. The receiver gets a one-shot read grant on a single
+            staged copy and nothing else.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.packages"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/zeta_file_paths" />
+        </provider>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

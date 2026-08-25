@@ -27,6 +27,8 @@
     <string name="action_cancel">Cancel</string>
     <string name="action_continue">Continue</string>
     <string name="action_unload">Unload</string>
+    <string name="action_share">Share</string>
+    <string name="action_export">Export</string>
     <string name="action_uninstall">Uninstall</string>
     <string name="action_open_settings">Open settings</string>
     <string name="action_clear_logs">Clear logs</string>
@@ -60,6 +62,11 @@
     <string name="banner_import_unreadable">Import failed: cannot read the selected file</string>
     <string name="banner_import_missing">Import failed: no file at %1$s</string>
     <string name="banner_uninstalled">Uninstalled %1$s</string>
+    <string name="banner_unloaded">%1$s dropped from memory</string>
+    <string name="banner_unload_not_loaded">%1$s was not in memory</string>
+    <string name="banner_unload_screen_open">Close the %1$s screen first</string>
+    <string name="banner_exported">Saved to Downloads: %1$s</string>
+    <string name="banner_export_failed">Export failed: %1$s</string>
 
     <!-- Notifications -->
     <string name="notification_channel_runs">Plugin runs</string>

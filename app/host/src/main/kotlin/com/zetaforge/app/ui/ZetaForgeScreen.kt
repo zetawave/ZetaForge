@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -105,6 +107,8 @@ data class HostActions(
     val onCloseCode: () -> Unit,
     val onRunFailing: (PluginEntry) -> Unit,
     val onRunThrowing: (PluginEntry) -> Unit,
+    val onShare: (PluginEntry) -> Unit,
+    val onExport: (PluginEntry) -> Unit,
     val onUnload: (PluginEntry) -> Unit,
     val onUninstall: (PluginEntry) -> Unit,
     val onLevelChange: (ZetaLogLevel) -> Unit,
@@ -261,6 +265,8 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
             onDismiss = actions.onCloseDetails,
             onRunFailing = { actions.onRunFailing(details.entry) },
             onRunThrowing = { actions.onRunThrowing(details.entry) },
+            onShare = { actions.onShare(details.entry) },
+            onExport = { actions.onExport(details.entry) },
             onUnload = { actions.onUnload(details.entry) },
             onUninstall = { actions.onUninstall(details.entry) },
             onViewCode = { actions.onViewCode(details.entry) },
@@ -327,7 +333,17 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
 
 @Composable
 private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modifier = Modifier) {
+    val listState = rememberLazyListState()
+
+    // The banner sits at the top of the list, so from anywhere further down it
+    // would announce itself off-screen - and an answer nobody sees is the same
+    // as no answer at all.
+    LaunchedEffect(state.banner) {
+        if (state.banner != null) listState.animateScrollToItem(0)
+    }
+
     LazyColumn(
+        state = listState,
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(bottom = 24.dp),
