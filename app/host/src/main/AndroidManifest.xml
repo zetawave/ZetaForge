@@ -10,6 +10,18 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!--
+        ZetaForge updates itself from its own GitHub releases, which means
+        handing an APK to the system installer. Declared here rather than in
+        zetaforge.permissions because it is the app's own need: that file is the
+        ceiling of what *plugins* may ask for, and installing packages is not
+        something a plugin should ever be able to request.
+
+        Declaring is not granting. Android grants this per app in Settings, and
+        the update flow sends the user there when it is missing.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:name=".ZetaForgeApp"
         android:allowBackup="false"
@@ -18,6 +30,18 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="false"
         android:theme="@style/Theme.ZetaForge">
+
+        <!--
+            Where the package installer reports the outcome of an update. Not
+            exported: the only sender is this app's own PendingIntent.
+        -->
+        <receiver
+            android:name=".update.UpdateInstallReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.zetaforge.app.action.UPDATE_INSTALL_STATUS" />
+            </intent-filter>
+        </receiver>
 
         <!--
             Sharing a .zeta means handing a file to an app that cannot read this

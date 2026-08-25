@@ -66,6 +66,7 @@ fun AppSettingsScreen(
     onTheme: (AppPreferences.Theme) -> Unit,
     onLogLevel: (ZetaLogLevel) -> Unit,
     onNotifyResults: (Boolean) -> Unit,
+    onCheckUpdatesOnLaunch: (Boolean) -> Unit,
     onReplayOnboarding: () -> Unit,
     onClearLogs: () -> Unit,
     modifier: Modifier = Modifier,
@@ -96,6 +97,17 @@ fun AppSettingsScreen(
                     help = stringResource(R.string.app_settings_notify_results_help),
                     checked = state.preferences.notifyManualResults,
                     onCheckedChange = onNotifyResults,
+                )
+            }
+        }
+
+        item {
+            Card(stringResource(R.string.app_settings_updates)) {
+                SwitchRow(
+                    title = stringResource(R.string.app_settings_check_updates),
+                    help = stringResource(R.string.app_settings_check_updates_help),
+                    checked = state.preferences.checkUpdatesOnLaunch,
+                    onCheckedChange = onCheckUpdatesOnLaunch,
                 )
             }
         }
@@ -239,7 +251,11 @@ fun DiagnosticsScreen(
 }
 
 @Composable
-fun AboutScreen(modifier: Modifier = Modifier) {
+fun AboutScreen(
+    update: HostUiState.UpdateState,
+    onCheckUpdates: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     ScreenScaffold(modifier) {
         item {
             Column(
@@ -268,6 +284,34 @@ fun AboutScreen(modifier: Modifier = Modifier) {
         item {
             Card(null) {
                 Text(stringResource(R.string.about_body), style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        item {
+            Card(stringResource(R.string.app_settings_updates)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Button(onClick = onCheckUpdates, enabled = !update.checking) {
+                        Text(
+                            stringResource(
+                                if (update.checking) R.string.update_checking else R.string.update_action_check,
+                            ),
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    // The card on the plugin list is where an available update
+                    // is offered; here there is only ever a sentence to report.
+                    val summary = update.message
+                        ?: update.available?.let {
+                            stringResource(R.string.update_subtitle, it.version, "")
+                        }
+                    if (summary != null) {
+                        Text(
+                            summary.trim().trimEnd('·', ' '),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
         }
         item {

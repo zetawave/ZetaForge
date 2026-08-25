@@ -8,4 +8,6 @@
 -->
 <paths>
     <cache-path name="shared-packages" path="shared-packages/" />
+    <!-- A downloaded update, on its way to the system package installer. -->
+    <cache-path name="updates" path="updates/" />
 </paths>

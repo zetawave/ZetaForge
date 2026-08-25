@@ -337,5 +337,23 @@
     <string name="screen_crashed_body">%1$s threw an exception, so its screen was closed and the plugin unloaded. ZetaForge itself is unaffected.</string>
     <string name="screen_permission_intro">%1$s needs these to work:</string>
     <string name="screen_special_access_body">This has to be switched on in Android Settings.</string>
+
+    <!-- Updating the app itself -->
+    <string name="update_title">Update available</string>
+    <string name="update_subtitle">ZetaForge %1$s · %2$s</string>
+    <string name="update_action_download">Download and install</string>
+    <string name="update_action_check">Check for updates</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_downloading">Downloading %1$d%%</string>
+    <string name="update_up_to_date">ZetaForge is up to date</string>
+    <string name="update_check_failed">Could not check for updates: %1$s</string>
+    <string name="update_download_failed">Download failed: %1$s</string>
+    <string name="update_api_warning">This update changes the Host API. Plugins built for the current one may stop loading until they are rebuilt.</string>
+    <string name="update_permission_title">Allow installing apps</string>
+    <string name="update_permission_body">Android needs your permission before ZetaForge can install an update. It opens Settings, where you allow this app to install unknown apps.</string>
+    <string name="update_permission_open">Open Settings</string>
+    <string name="app_settings_updates">Updates</string>
+    <string name="app_settings_check_updates">Check on every launch</string>
+    <string name="app_settings_check_updates_help">Asks GitHub whether a newer release exists. Nothing is sent: the repository is public and the check only reads.</string>
 </resources>
 
