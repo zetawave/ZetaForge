@@ -1,6 +1,7 @@
 package com.zetaforge.sdk.ui
 
 import android.content.Context
+import android.net.Uri
 import android.os.Bundle
 import kotlinx.coroutines.CoroutineScope
 
@@ -72,4 +73,58 @@ interface ZetaUiHost {
      * way.
      */
     fun close()
+
+    /**
+     * Starts this plugin's own `execute()` as a background run, in the Host's
+     * foreground service, and returns whether the request was made.
+     *
+     * For the shape of plugin a screen alone cannot serve: work the user sets
+     * up by looking at it and then expects to keep going with the screen
+     * closed and the phone in a pocket. A coroutine started in [scope] dies
+     * with the screen, and a process with no foreground component is frozen by
+     * Android within seconds — so the work has to move to where every other run
+     * already lives.
+     *
+     * The run goes through the ordinary path: the same permission check, the
+     * same notification with its Stop button, the same result reporting. The
+     * plugin is the same loaded instance the screen is talking to, so a
+     * singleton is all it takes for the two halves to see each other.
+     *
+     * Returns false when a run of this plugin is already in flight.
+     */
+    fun runInBackground(): Boolean
+
+    /**
+     * Asks a background run started by [runInBackground] to stop, exactly as
+     * the notification's Stop button does.
+     *
+     * The run is cancelled cooperatively, so a plugin that holds its state on
+     * disk resumes rather than loses it.
+     */
+    fun requestStop()
+
+    /**
+     * Whether a run of this plugin is in flight right now.
+     *
+     * Read at composition time to decide what the screen offers — Start or
+     * Stop — without the plugin having to track a run that may have been
+     * stopped from the notification.
+     */
+    fun isRunning(): Boolean
+
+    /**
+     * Asks the user to pick a file, and returns what they chose.
+     *
+     * `startActivityForResult` needs an Activity, and a plugin is deliberately
+     * never given one: the picker therefore belongs to the Host, which owns the
+     * launcher and hands back the `Uri`. Read it through
+     * `context.contentResolver` — the grant is read-only and does not survive
+     * the process.
+     *
+     * Returns null when the user backs out.
+     *
+     * @param mimeTypes what to offer, as MIME types such as an image wildcard.
+     *   Empty means everything.
+     */
+    suspend fun pickContent(vararg mimeTypes: String): Uri?
 }

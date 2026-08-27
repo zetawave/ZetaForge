@@ -306,8 +306,14 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
     fun start(pluginId: String, input: Bundle = Bundle()) {
         val application = getApplication<Application>()
         val started = System.currentTimeMillis()
+        // A plugin that reads the position needs a service typed `location`:
+        // from API 34 a `dataSync` one throws as soon as it does, and from API
+        // 35 it is stopped after about six hours a day.
+        val needsLocation = state.value.plugins.firstOrNull { it.id == pluginId }
+            ?.installed?.manifest?.permissions
+            ?.any { it.name.endsWith("_LOCATION") } == true
         runningJob = viewModelScope.launch {
-            PluginExecutionService.start(application)
+            PluginExecutionService.start(application, needsLocation)
             try {
                 val result = runtime.execute(pluginId, input)
                 (result as? PluginResult.Failure)?.let(::showPermissionBlockIfNeeded)

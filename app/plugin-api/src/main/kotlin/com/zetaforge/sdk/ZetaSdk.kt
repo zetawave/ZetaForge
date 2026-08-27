@@ -46,8 +46,12 @@ object ZetaSdk {
      * die on a NoSuchMethodError halfway through the first frame.
      *
      * 1 - initial: ZetaUiPlugin.Content(ZetaUiHost), Compose provided by the Host.
+     * 2 - adds ZetaUiHost.runInBackground()/requestStop()/isRunning(), so a
+     *     screen can hand its own work to the Host's foreground service and
+     *     keep it running with the screen closed, and pickContent(), because
+     *     only the Host can own an Activity result.
      */
-    const val UI_API_VERSION: Int = 1
+    const val UI_API_VERSION: Int = 2
 
     /**
      * Version of the `.zeta` package/manifest format understood by the runtime.

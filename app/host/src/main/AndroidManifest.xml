@@ -101,11 +101,18 @@
             Keeps a plugin run alive while it works. Without a foreground
             service Android freezes the process as soon as the screen goes off,
             and a long transfer simply stops until the phone wakes up.
+
+            Two types, chosen per run rather than declared as one: `dataSync`
+            for ordinary work, `location` for a plugin that reads the position
+            while nobody is watching. The distinction is not cosmetic - from
+            API 34 reading the location from a service typed `dataSync` throws,
+            and from API 35 a `dataSync` service is capped at about six hours a
+            day while a `location` one is not.
         -->
         <service
             android:name=".service.PluginExecutionService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="dataSync|location" />
 
         <!--
             Fires scheduled runs, and puts every alarm back after a reboot or an

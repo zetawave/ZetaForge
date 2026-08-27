@@ -3,10 +3,13 @@ package com.zetaforge.app.ui.screen
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import androidx.activity.ComponentActivity
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,22 +27,26 @@ import androidx.compose.runtime.Recomposer
 import com.zetaforge.app.R
 import com.zetaforge.app.ZetaForgeApp
 import com.zetaforge.app.permission.ActivityPermissionGateway
+import com.zetaforge.app.service.PluginExecutionService
 import com.zetaforge.app.ui.AppPreferences
 import com.zetaforge.app.ui.theme.ZetaForgeTheme
 import com.zetaforge.runtime.UiOpenResult
 import com.zetaforge.runtime.ZetaPluginRuntime
 import com.zetaforge.runtime.permission.PermissionPlan
 import com.zetaforge.runtime.permission.SpecialAccess
+import com.zetaforge.runtime.task.ZetaTaskCenter
 import com.zetaforge.runtime.ui.ZetaUiSessions
 import com.zetaforge.sdk.ui.ZetaUiHost
 import com.zetaforge.sdk.ui.ZetaUiPlugin
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The one Activity every plugin screen is drawn inside.
@@ -97,6 +104,18 @@ class PluginScreenActivity : ComponentActivity() {
 
     private var pendingPermission: CompletableDeferred<Boolean>? = null
     private var pendingSpecialAccess: CompletableDeferred<Boolean>? = null
+    private var pendingPick: CompletableDeferred<Uri?>? = null
+
+    /**
+     * Whether this plugin declares a location permission, which decides the
+     * type the foreground service of a [ZetaUiHost.runInBackground] run is
+     * started with. Read from the manifest when the screen opens, because by
+     * the time the service asks it has about five seconds to answer.
+     */
+    private var declaresLocation = false
+
+    /** Owned by the Host so a plugin never touches an Activity result. */
+    private lateinit var pickLauncher: ActivityResultLauncher<Array<String>>
 
     /** What the screen area is showing. */
     internal sealed class Phase {
@@ -118,6 +137,11 @@ class PluginScreenActivity : ComponentActivity() {
             onExplain = ::explainPermissions,
             onSpecialAccess = ::explainSpecialAccess,
         )
+
+        pickLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            pendingPick?.complete(uri)
+            pendingPick = null
+        }
 
         refreshTheme()
         setContentView(buildViewTree())
@@ -172,6 +196,8 @@ class PluginScreenActivity : ComponentActivity() {
             is UiOpenResult.Ready -> {
                 sessionOpen = true
                 screen = result.plugin
+                declaresLocation = result.entry.installed.manifest.permissions
+                    .any { it.name.endsWith("_LOCATION") }
                 setTitle(result.entry.installed.displayName)
                 pluginName = result.entry.installed.displayName
                 settingsSnapshot = runtime.settings.toBundle(
@@ -476,6 +502,37 @@ class PluginScreenActivity : ComponentActivity() {
 
         override fun close() {
             finish()
+        }
+
+        /**
+         * Hands the plugin's own work to the service every other run goes
+         * through, rather than to a coroutine that dies with this screen.
+         */
+        override fun runInBackground(): Boolean {
+            if (isRunning()) return false
+            PluginExecutionService.runManual(
+                context = applicationContext,
+                pluginId = this@PluginScreenActivity.pluginId,
+                needsLocation = declaresLocation,
+            )
+            return true
+        }
+
+        override fun requestStop() {
+            PluginExecutionService.stopRun(applicationContext)
+        }
+
+        override fun isRunning(): Boolean =
+            ZetaTaskCenter.current.value?.pluginId == this@PluginScreenActivity.pluginId
+
+        override suspend fun pickContent(vararg mimeTypes: String): Uri? {
+            val deferred = CompletableDeferred<Uri?>()
+            // One picker at a time: a second launch would orphan the first.
+            pendingPick?.complete(null)
+            pendingPick = deferred
+            val types = if (mimeTypes.isEmpty()) arrayOf("*/*") else arrayOf(*mimeTypes)
+            withContext(Dispatchers.Main) { pickLauncher.launch(types) }
+            return deferred.await()
         }
     }
 

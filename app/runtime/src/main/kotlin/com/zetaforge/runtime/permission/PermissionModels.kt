@@ -70,7 +70,22 @@ enum class SpecialAccess(
     INSTALL_PACKAGES("installPackages", "Install unknown apps", Build.VERSION_CODES.O),
 
     /** Modify system settings (`WRITE_SETTINGS`). */
-    WRITE_SETTINGS("writeSettings", "Modify system settings", Build.VERSION_CODES.M);
+    WRITE_SETTINGS("writeSettings", "Modify system settings", Build.VERSION_CODES.M),
+
+    /**
+     * Read the location while the app is not in the foreground
+     * (`ACCESS_BACKGROUND_LOCATION`).
+     *
+     * A runtime permission by type, but not by behaviour, which is why it lives
+     * here: from API 30 the system dialog no longer offers "Allow all the
+     * time", so asking for it through `requestPermissions()` returns denied
+     * without showing anything. Worse, bundling it into the same request as the
+     * foreground location permissions makes Android deny *all* of them
+     * silently. Routed as special access it gets what it actually needs - the
+     * foreground permission granted first, then the Settings page, then a
+     * re-check on the way back - which is exactly the shape of this flow.
+     */
+    BACKGROUND_LOCATION("backgroundLocation", "Location all the time", Build.VERSION_CODES.Q);
 
     companion object {
         fun fromId(id: String): SpecialAccess? =
