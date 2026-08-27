@@ -1,10 +1,12 @@
 package com.zetaforge.app.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Bundle
@@ -52,6 +54,12 @@ class PluginExecutionService : Service() {
     /** Whether the current run was started by an alarm; changes the wording. */
     private var scheduled = false
 
+    /**
+     * Whether this run reads the device location, which decides the type the
+     * foreground service is started with. See [startForegroundCompat].
+     */
+    private var needsLocation = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -69,9 +77,12 @@ class PluginExecutionService : Service() {
 
             ACTION_RUN -> {
                 scheduled = intent.getBooleanExtra(EXTRA_SCHEDULED, false)
+                val pluginId = intent.getStringExtra(EXTRA_PLUGIN_ID)
+                needsLocation = intent.getBooleanExtra(EXTRA_NEEDS_LOCATION, false) ||
+                    pluginId?.let { declaresLocation(it) } == true
                 startForegroundCompat(ZetaNotifications.running(this, ZetaTaskCenter.current.value, scheduled, stopIntent()))
                 observeTask()
-                intent.getStringExtra(EXTRA_PLUGIN_ID)?.let { execute(it) }
+                pluginId?.let { execute(it) }
                 return START_NOT_STICKY
             }
 
@@ -79,6 +90,7 @@ class PluginExecutionService : Service() {
                 // Accompanying a run the caller drives itself (the UI path before
                 // the plugin id is known).
                 scheduled = false
+                needsLocation = intent?.getBooleanExtra(EXTRA_NEEDS_LOCATION, false) ?: false
                 startForegroundCompat(ZetaNotifications.running(this, ZetaTaskCenter.current.value, false, stopIntent()))
                 observeTask()
                 return START_NOT_STICKY
@@ -229,51 +241,107 @@ class PluginExecutionService : Service() {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
+    /**
+     * Starts the service with the narrowest type the run actually needs.
+     *
+     * `location` rather than `dataSync` for a plugin that reads the position,
+     * for two reasons that both bite only on recent Android: from API 34 a
+     * service typed `dataSync` throws the moment it touches the location APIs,
+     * and from API 35 a `dataSync` service is stopped after roughly six hours a
+     * day while a `location` one runs for as long as it is needed.
+     *
+     * The type is downgraded when the location permission is not actually held:
+     * declaring a type the app has no permission for is itself a crash.
+     */
     private fun startForegroundCompat(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                ZetaNotifications.ID_RUNNING,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-            )
-        } else {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             startForeground(ZetaNotifications.ID_RUNNING, notification)
+            return
         }
+        val type = if (needsLocation && hasLocationPermission()) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        } else {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        }
+        startForeground(ZetaNotifications.ID_RUNNING, notification, type)
     }
+
+    private fun hasLocationPermission(): Boolean =
+        checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    /**
+     * Whether the plugin about to run declares a location permission.
+     *
+     * Read from what the runtime already holds in memory: this sits on the path
+     * to `startForeground`, which Android gives about five seconds, so it must
+     * not wait for a disk scan. When the answer is not known yet, the hint the
+     * caller passed (`EXTRA_NEEDS_LOCATION`) is what decides.
+     */
+    private fun declaresLocation(pluginId: String): Boolean = runCatching {
+        ZetaForgeApp.instance(this).runtime.plugins.value
+            .firstOrNull { it.id == pluginId }
+            ?.installed?.manifest?.permissions
+            ?.any { it.name.endsWith("_LOCATION") } == true
+    }.getOrDefault(false)
 
     companion object {
         private const val ACTION_STOP = "com.zetaforge.app.action.STOP_PLUGIN"
         private const val ACTION_RUN = "com.zetaforge.app.action.RUN_PLUGIN_SERVICE"
         private const val EXTRA_PLUGIN_ID = "pluginId"
         private const val EXTRA_SCHEDULED = "scheduled"
+        private const val EXTRA_NEEDS_LOCATION = "needsLocation"
 
         /** How long to wait for a run to be published before giving up. */
         private const val STARTUP_GRACE_MS = 20_000L
 
-        /** Started from the UI, which drives the run itself. */
-        fun start(context: Context) {
-            launch(context, Intent(context, PluginExecutionService::class.java))
+        /**
+         * Started from the UI, which drives the run itself.
+         *
+         * @param needsLocation the run reads the device position, so the
+         *   service has to be typed `location` rather than `dataSync`.
+         */
+        fun start(context: Context, needsLocation: Boolean = false) {
+            launch(
+                context,
+                Intent(context, PluginExecutionService::class.java)
+                    .putExtra(EXTRA_NEEDS_LOCATION, needsLocation),
+            )
         }
 
         /** Started from the UI, with the service running the plugin. */
-        fun runManual(context: Context, pluginId: String) {
+        fun runManual(context: Context, pluginId: String, needsLocation: Boolean = false) {
             launch(
                 context,
                 Intent(context, PluginExecutionService::class.java)
                     .setAction(ACTION_RUN)
                     .putExtra(EXTRA_PLUGIN_ID, pluginId)
-                    .putExtra(EXTRA_SCHEDULED, false),
+                    .putExtra(EXTRA_SCHEDULED, false)
+                    .putExtra(EXTRA_NEEDS_LOCATION, needsLocation),
             )
         }
 
         /** Started from an alarm, with no UI anywhere. */
-        fun runScheduled(context: Context, pluginId: String) {
+        fun runScheduled(context: Context, pluginId: String, needsLocation: Boolean = false) {
             launch(
                 context,
                 Intent(context, PluginExecutionService::class.java)
                     .setAction(ACTION_RUN)
                     .putExtra(EXTRA_PLUGIN_ID, pluginId)
-                    .putExtra(EXTRA_SCHEDULED, true),
+                    .putExtra(EXTRA_SCHEDULED, true)
+                    .putExtra(EXTRA_NEEDS_LOCATION, needsLocation),
+            )
+        }
+
+        /**
+         * Asks the running plugin to stop, exactly as the notification Stop
+         * button does: the run is cancelled and the service goes away with it.
+         * Stopping the service outright would leave the job running unattended.
+         */
+        fun stopRun(context: Context) {
+            launch(
+                context,
+                Intent(context, PluginExecutionService::class.java).setAction(ACTION_STOP),
             )
         }
 

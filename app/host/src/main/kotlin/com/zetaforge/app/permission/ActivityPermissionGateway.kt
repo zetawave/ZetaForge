@@ -168,6 +168,11 @@ class ActivityPermissionGateway(
 
             SpecialAccess.WRITE_SETTINGS ->
                 Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, packageUri)
+
+            // Android exposes no intent that lands on one permission group, so
+            // this is the app page and the user takes the last two steps:
+            // Permissions, Location, Allow all the time.
+            SpecialAccess.BACKGROUND_LOCATION -> appDetails(packageUri)
         }
         return if (intent.resolveActivity(activity.packageManager) != null) intent else appDetails(packageUri)
     }

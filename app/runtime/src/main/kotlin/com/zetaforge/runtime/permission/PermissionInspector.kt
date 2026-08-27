@@ -143,6 +143,9 @@ class PermissionInspector(
                 if (sdkInt >= Build.VERSION_CODES.O) context.packageManager.canRequestPackageInstalls() else true
 
             SpecialAccess.WRITE_SETTINGS -> Settings.System.canWrite(context)
+
+            SpecialAccess.BACKGROUND_LOCATION ->
+                isGranted("android.permission.ACCESS_BACKGROUND_LOCATION")
         }
     }
 

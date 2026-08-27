@@ -88,7 +88,10 @@ class ScheduleReceiver : BroadcastReceiver() {
         }
 
         app.runtime.logger.info(SOURCE, pluginId, "Scheduled run starting")
-        PluginExecutionService.runScheduled(context, pluginId)
+        val needsLocation = app.runtime.plugins.value.firstOrNull { it.id == pluginId }
+            ?.installed?.manifest?.permissions
+            ?.any { it.name.endsWith("_LOCATION") } == true
+        PluginExecutionService.runScheduled(context, pluginId, needsLocation)
 
         // A one-shot has now happened; anything else gets its next alarm. The
         // service records the outcome, which is what INTERVAL anchors on, so it
