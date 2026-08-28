@@ -98,26 +98,24 @@ fun PluginCard(
                 ZetaLogo(size = 38.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            entry.installed.displayName,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            stringResource(R.string.plugin_version, entry.installed.version),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
+                    // The name gets the line to itself. Sharing it with the
+                    // version meant a plugin called anything real - "Live
+                    // Location" was enough - arrived on screen as "Live Locat…",
+                    // which is the one word on the card that has to survive.
                     Text(
-                        text = if (manifest.author.isNotBlank()) {
-                            stringResource(R.string.plugin_by_author, manifest.author)
-                        } else {
-                            entry.installed.id
+                        entry.installed.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = buildString {
+                            if (manifest.author.isNotBlank()) {
+                                append(stringResource(R.string.plugin_by_author, manifest.author))
+                                append("  ·  ")
+                            }
+                            append(stringResource(R.string.plugin_version, entry.installed.version))
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

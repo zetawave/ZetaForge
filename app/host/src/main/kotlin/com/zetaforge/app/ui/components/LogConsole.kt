@@ -18,9 +18,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CloseFullscreen
 import androidx.compose.material.icons.outlined.DeleteSweep
-import androidx.compose.material.icons.outlined.OpenInFull
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -47,6 +45,11 @@ import com.zetaforge.sdk.ZetaLogLevel
  *
  * Records arrive already formatted by `ZetaLogger`; this composable only decides
  * colours, filtering and scrolling.
+ *
+ * It used to carry an expand/collapse control, from when it shared the plugin
+ * list's screen and had to be able to take it over. It owns the Activity tab
+ * now, so there is nothing to expand into and no title to repeat: the tab says
+ * what this is, and the width goes to the level filter instead.
  */
 @Composable
 fun LogConsole(
@@ -55,8 +58,6 @@ fun LogConsole(
     onLevelChange: (ZetaLogLevel) -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
-    expanded: Boolean = false,
-    onToggleExpand: (() -> Unit)? = null,
 ) {
     val accents = zetaAccents()
     val listState = rememberLazyListState()
@@ -72,16 +73,13 @@ fun LogConsole(
         contentColor = accents.consoleText,
     ) {
         Column(Modifier.fillMaxSize()) {
+            // No title here on purpose: the tab above already says Activity,
+            // and repeating it cost the level chips the width they needed -
+            // ERROR arrived on screen clipped to "ERROF".
             Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    stringResource(R.string.logs_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = accents.consoleText,
-                )
-                Spacer(Modifier.width(12.dp))
                 Row(
                     modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -107,18 +105,6 @@ fun LogConsole(
                         tint = accents.muted,
                         modifier = Modifier.size(20.dp),
                     )
-                }
-                if (onToggleExpand != null) {
-                    IconButton(onClick = onToggleExpand) {
-                        Icon(
-                            if (expanded) Icons.Outlined.CloseFullscreen else Icons.Outlined.OpenInFull,
-                            contentDescription = stringResource(
-                                if (expanded) R.string.action_collapse_logs else R.string.action_expand_logs
-                            ),
-                            tint = accents.muted,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
                 }
             }
 

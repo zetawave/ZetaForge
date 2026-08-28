@@ -21,8 +21,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.MonitorHeart
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
@@ -35,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -69,8 +76,15 @@ fun AppSettingsScreen(
     onCheckUpdatesOnLaunch: (Boolean) -> Unit,
     onReplayOnboarding: () -> Unit,
     onClearLogs: () -> Unit,
+    onNavigate: (HostUiState.Route) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val problems = if (state.schedules.values.any { it.isAutomatic }) {
+        state.readiness?.blockingCount ?: 0
+    } else {
+        0
+    }
+
     ScreenScaffold(modifier) {
         item {
             Card(stringResource(R.string.app_settings_appearance)) {
@@ -112,25 +126,45 @@ fun AppSettingsScreen(
             }
         }
 
+        // The level filter lives on the Activity tab, next to the log it
+        // filters, where it is read in context and changed in one tap. Having
+        // it here as well meant two controls for one setting, in two places,
+        // agreeing only because they happened to share a preference.
         item {
             Card(stringResource(R.string.app_settings_logs)) {
                 Text(
-                    stringResource(R.string.app_settings_log_level),
-                    style = MaterialTheme.typography.labelLarge,
+                    stringResource(R.string.app_settings_logs_help),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(6.dp))
-                ZetaLogLevel.entries.forEach { level ->
-                    ChoiceRow(
-                        label = level.name,
-                        selected = state.preferences.minLogLevel == level,
-                        onClick = { onLogLevel(level) },
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
                 TextButton(onClick = onClearLogs) {
                     Text(stringResource(R.string.app_settings_clear_logs))
                 }
+            }
+        }
+
+        // The three screens that used to live in an overflow menu. They are
+        // rows now, in the one place a person already goes looking for "the
+        // rest of the app" - which is what a menu was pretending to be.
+        item {
+            Card(stringResource(R.string.app_settings_more)) {
+                NavigationRow(
+                    label = stringResource(R.string.menu_diagnostics),
+                    icon = Icons.Outlined.MonitorHeart,
+                    badge = problems,
+                    onClick = { onNavigate(HostUiState.Route.DIAGNOSTICS) },
+                )
+                NavigationRow(
+                    label = stringResource(R.string.menu_help),
+                    icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                    onClick = { onNavigate(HostUiState.Route.HELP) },
+                )
+                NavigationRow(
+                    label = stringResource(R.string.menu_about),
+                    icon = Icons.Outlined.Info,
+                    onClick = { onNavigate(HostUiState.Route.ABOUT) },
+                )
             }
         }
 
@@ -141,6 +175,48 @@ fun AppSettingsScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * One tappable row that leads somewhere else.
+ *
+ * The whole row is the target rather than the label: a list of destinations
+ * where only the words respond is one that feels broken on a phone.
+ */
+@Composable
+private fun NavigationRow(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    badge: Int = 0,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        if (badge > 0) {
+            Badge { Text(badge.toString()) }
+            Spacer(Modifier.size(4.dp))
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 

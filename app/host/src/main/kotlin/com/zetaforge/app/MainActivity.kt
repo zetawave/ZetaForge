@@ -177,7 +177,7 @@ class MainActivity : ComponentActivity() {
                         onUninstall = { viewModel.uninstall(it.id) },
                         onLevelChange = viewModel::setMinLevel,
                         onClearLogs = viewModel::clearLogs,
-                        onToggleLogs = viewModel::toggleLogsExpanded,
+                        onStopRun = viewModel::stopRun,
                         onQueryChange = viewModel::setQuery,
                         onToggleCard = { viewModel.togglePluginExpanded(it.id) },
                         onSettings = viewModel::openSettings,
