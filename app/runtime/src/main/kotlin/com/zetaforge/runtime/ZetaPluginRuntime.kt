@@ -343,6 +343,21 @@ class ZetaPluginRuntime(
             val runStarted = System.currentTimeMillis()
             val result = try {
                 plugin.instance.execute(appContext, effective)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                // A stop the user asked for, not a failure. It arrives as an
+                // exception because that is how coroutines cancel, and
+                // reporting it as one told somebody who had just pressed Stop
+                // that their plugin had crashed. A long-running plugin ends
+                // this way every single time it ends.
+                val duration = System.currentTimeMillis() - runStarted
+                logger.info(SOURCE, pluginId, "Stopped after ${duration} ms")
+                ZetaTaskCenter.end(pluginId)
+                updateState(pluginId, PluginState.STOPPED)
+                return@withContext PluginResult.Success(
+                    message = "Stopped",
+                    durationMs = duration,
+                    data = mapOf("stopped" to "true"),
+                )
             } catch (t: Throwable) {
                 // Includes RuntimeException thrown deliberately by a plugin.
                 val duration = System.currentTimeMillis() - runStarted

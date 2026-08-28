@@ -254,6 +254,31 @@
     <string name="onboarding_ready_title">Sei pronto</string>
     <string name="onboarding_ready_body">Importa un pacchetto .zeta per cominciare. Puoi cambiare tutto più tardi dal menu.</string>
 
+    <string name="app_settings_logs_help">Il log sta nella scheda Attività, con il suo filtro per livello.</string>
+    <string name="plugin_state_discovered">Trovato</string>
+    <string name="plugin_state_validating">Verifica</string>
+    <string name="plugin_state_installing">Installazione</string>
+    <string name="plugin_state_installed">Installato</string>
+    <string name="plugin_state_loading">Caricamento</string>
+    <string name="plugin_state_loaded">Caricato</string>
+    <string name="plugin_state_starting">Avvio</string>
+    <string name="plugin_state_running">In esecuzione</string>
+    <string name="plugin_state_success">Riuscito</string>
+    <string name="plugin_state_failed">Fallito</string>
+    <string name="plugin_state_stopped">Fermato</string>
+
+    <!-- ===================================================================
+         Navigazione e attività
+         =================================================================== -->
+    <string name="nav_plugins">Plugin</string>
+    <string name="nav_activity">Attività</string>
+    <string name="nav_settings">Impostazioni</string>
+    <string name="activity_running_for">In esecuzione da %1$s</string>
+    <string name="activity_idle">Non sta girando nulla</string>
+    <string name="activity_errors">%1$d errori nel log</string>
+    <string name="action_stop">Ferma</string>
+    <string name="app_settings_more">Altro</string>
+
     <!-- ===================================================================
          Menu, impostazioni e aiuto
          =================================================================== -->

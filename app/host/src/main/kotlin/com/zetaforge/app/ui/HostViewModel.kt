@@ -26,6 +26,7 @@ import com.zetaforge.runtime.schedule.Schedule
 import com.zetaforge.runtime.pkg.PluginSourceFile
 import com.zetaforge.runtime.pkg.PluginSourceReader
 import com.zetaforge.runtime.settings.PluginSettingsStore
+import com.zetaforge.runtime.task.RunningTask
 import com.zetaforge.runtime.task.ZetaTaskCenter
 import com.zetaforge.sdk.ZetaActionResult
 import com.zetaforge.sdk.ZetaSettingsSpec
@@ -51,7 +52,13 @@ data class HostUiState(
     val minLevel: ZetaLogLevel = ZetaLogLevel.DEBUG,
     val query: String = "",
     val expandedPlugins: Set<String> = emptySet(),
-    val logsExpanded: Boolean = false,
+    /** The run in flight, from the process-wide task centre. Null when idle. */
+    val runningTask: RunningTask? = null,
+    /**
+     * How many log records had been written the last time the user looked at
+     * the Activity tab. What is newer than this is what the tab badges.
+     */
+    val logsSeenCount: Int = 0,
     val importing: Boolean = false,
     val banner: Banner? = null,
     val details: DetailsState? = null,
@@ -64,12 +71,32 @@ data class HostUiState(
     val schedules: Map<String, Schedule> = emptyMap(),
     val readiness: SystemReadiness? = null,
     val route: Route = Route.PLUGINS,
+    /**
+     * Where "back" goes, one entry per screen pushed on top of a tab.
+     *
+     * Tabs themselves never enter it: switching tab is not a step to undo, and
+     * a bottom bar that has to be un-navigated is one nobody trusts.
+     */
+    val backStack: List<Route> = emptyList(),
     val onboarding: Boolean = false,
     val preferences: AppPreferences.Settings = AppPreferences.Settings(),
     val update: UpdateState = UpdateState(),
 ) {
     val filteredLogs: List<ZetaLogRecord>
         get() = logs.filter { it.level.ordinal >= minLevel.ordinal }
+
+    /**
+     * Warnings and errors written since the Activity tab was last opened.
+     *
+     * The number the tab badges, and deliberately only the two levels worth
+     * interrupting somebody for: a badge that counts every debug line is a
+     * badge people learn to ignore within a minute.
+     */
+    val unseenIssues: Int
+        get() = logs.drop(logsSeenCount).count { it.level.ordinal >= ZetaLogLevel.WARN.ordinal }
+
+    /** True while a plugin run is in flight. */
+    val isRunning: Boolean get() = runningTask != null
 
     /**
      * Plugins matching the search box, filtered on the text a user would think
@@ -114,7 +141,27 @@ data class HostUiState(
         val needsPermission: Boolean = false,
     )
 
-    enum class Route { PLUGINS, APP_SETTINGS, HELP, DIAGNOSTICS, ABOUT }
+    /**
+     * Every place the app can be.
+     *
+     * The first three are tabs and sit side by side; the rest are pushed on top
+     * of a tab and come back with the arrow. Keeping both in one enum means the
+     * top bar and the back handler each read one value rather than two.
+     */
+    enum class Route(val isTab: Boolean = false) {
+        PLUGINS(isTab = true),
+        ACTIVITY(isTab = true),
+        APP_SETTINGS(isTab = true),
+        HELP,
+        DIAGNOSTICS,
+        ABOUT,
+        ;
+
+        companion object {
+            /** The tabs, in the order the bottom bar shows them. */
+            val tabs: List<Route> = entries.filter { it.isTab }
+        }
+    }
 
     /**
      * The schedule being edited. Held apart from the saved one so that closing
@@ -225,6 +272,16 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
         // Every launch, unless the user turned it off. Silent: it only speaks
         // when there is something newer to install.
         if (preferences.state.value.checkUpdatesOnLaunch) checkForUpdates(manual = false)
+
+        // What is running, and how far along, for the Activity tab. It comes
+        // from the process-wide task centre rather than from this view model
+        // because a scheduled run happens in a process that may have no UI at
+        // all - and the screen has to be able to show one it did not start.
+        viewModelScope.launch {
+            ZetaTaskCenter.current.collect { task ->
+                ui.value = ui.value.copy(runningTask = task)
+            }
+        }
 
         // "Stop" in the notification asks the runtime to cancel; the job lives
         // here, so this is where the request is honoured.
@@ -761,12 +818,22 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
         preferences.setMinLogLevel(level)
     }
 
-    fun toggleLogsExpanded() {
-        ui.value = ui.value.copy(logsExpanded = !ui.value.logsExpanded)
-    }
-
     fun clearLogs() {
         runtime.logger.clear()
+        ui.value = ui.value.copy(logsSeenCount = 0)
+    }
+
+    /**
+     * Stops whatever is running, wherever it was started from.
+     *
+     * Both halves are needed and neither is redundant: a run this view model
+     * started is cancelled through its own job, and one started by an alarm
+     * lives in the foreground service, which only answers its stop intent.
+     */
+    fun stopRun() {
+        val pluginId = ui.value.runningTask?.pluginId ?: return
+        ZetaTaskCenter.requestCancel(pluginId)
+        PluginExecutionService.stopRun(getApplication())
     }
 
     fun dismissBanner() {
@@ -858,12 +925,39 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
 
     // -- navigation and preferences -------------------------------------------
 
+    /**
+     * Goes somewhere.
+     *
+     * Switching tab replaces where you are and clears the stack; opening a
+     * screen from a tab pushes, so the arrow returns to the tab that opened it
+     * rather than to a fixed home. Diagnostics is reachable from two places,
+     * and this is what makes both of them come back correctly.
+     */
     fun navigate(route: HostUiState.Route) {
-        ui.value = ui.value.copy(route = route)
+        val current = ui.value
+        if (route == current.route) return
+        val stack = if (route.isTab) emptyList() else current.backStack + current.route
+        ui.value = current.copy(route = route, backStack = stack)
+        // Marked on the way in *and* on the way out: everything written while
+        // the tab was open has been seen by definition, and counting it as new
+        // the moment you leave would badge the app for its own log lines.
+        if (route == HostUiState.Route.ACTIVITY || current.route == HostUiState.Route.ACTIVITY) {
+            markLogsSeen()
+        }
     }
 
     fun back() {
-        ui.value = ui.value.copy(route = HostUiState.Route.PLUGINS)
+        val current = ui.value
+        val previous = current.backStack.lastOrNull() ?: HostUiState.Route.PLUGINS
+        ui.value = current.copy(route = previous, backStack = current.backStack.dropLast(1))
+    }
+
+    /**
+     * The badge is about what happened while you were not looking, so it is
+     * cleared by looking - not by a button, and not on a timer.
+     */
+    fun markLogsSeen() {
+        ui.value = ui.value.copy(logsSeenCount = ui.value.logs.size)
     }
 
     fun finishOnboarding() {

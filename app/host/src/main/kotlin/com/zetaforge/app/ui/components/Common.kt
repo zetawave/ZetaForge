@@ -18,8 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zetaforge.app.R
 import com.zetaforge.app.ui.theme.zetaAccents
 import com.zetaforge.sdk.PluginState
 
@@ -76,10 +78,34 @@ fun StatePill(state: PluginState, modifier: Modifier = Modifier) {
                     .clip(CircleShape)
                     .background(color)
             )
-            Text(state.name, style = MaterialTheme.typography.labelSmall)
+            Text(state.label(), style = MaterialTheme.typography.labelSmall)
         }
     }
 }
+
+/**
+ * The lifecycle state, in words rather than as an enum constant.
+ *
+ * `PluginState.name` was going straight onto the card, which meant an Italian
+ * phone showing "INSTALLED" next to nine translated lines - the one piece of
+ * English left, and on the most-read part of the screen.
+ */
+@Composable
+fun PluginState.label(): String = stringResource(
+    when (this) {
+        PluginState.DISCOVERED -> R.string.plugin_state_discovered
+        PluginState.VALIDATING -> R.string.plugin_state_validating
+        PluginState.INSTALLING -> R.string.plugin_state_installing
+        PluginState.INSTALLED -> R.string.plugin_state_installed
+        PluginState.LOADING -> R.string.plugin_state_loading
+        PluginState.LOADED -> R.string.plugin_state_loaded
+        PluginState.STARTING -> R.string.plugin_state_starting
+        PluginState.RUNNING -> R.string.plugin_state_running
+        PluginState.SUCCESS -> R.string.plugin_state_success
+        PluginState.FAILED -> R.string.plugin_state_failed
+        PluginState.STOPPED -> R.string.plugin_state_stopped
+    }
+)
 
 /** Section header with an optional trailing action slot. */
 @Composable

@@ -1,7 +1,6 @@
 package com.zetaforge.app.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -10,59 +9,54 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.HelpOutline
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.MonitorHeart
-import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
+import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -70,7 +64,6 @@ import androidx.compose.ui.unit.dp
 import com.zetaforge.app.R
 import com.zetaforge.app.ui.components.CodeViewerDialog
 import com.zetaforge.app.ui.components.InstallPermissionDialog
-import com.zetaforge.app.ui.components.LogConsole
 import com.zetaforge.app.ui.components.PermissionBlockedDialog
 import com.zetaforge.app.ui.components.PermissionRequestDialog
 import com.zetaforge.app.ui.components.PluginCard
@@ -83,6 +76,7 @@ import com.zetaforge.app.ui.components.SpecialAccessDialog
 import com.zetaforge.app.ui.components.UpdateCard
 import com.zetaforge.app.ui.components.ZetaLogo
 import com.zetaforge.app.ui.screens.AboutScreen
+import com.zetaforge.app.ui.screens.ActivityScreen
 import com.zetaforge.app.ui.screens.AppSettingsScreen
 import com.zetaforge.app.ui.screens.DiagnosticsScreen
 import com.zetaforge.app.ui.screens.HelpScreen
@@ -115,7 +109,7 @@ data class HostActions(
     val onUninstall: (PluginEntry) -> Unit,
     val onLevelChange: (ZetaLogLevel) -> Unit,
     val onClearLogs: () -> Unit,
-    val onToggleLogs: () -> Unit,
+    val onStopRun: () -> Unit,
     val onQueryChange: (String) -> Unit,
     val onToggleCard: (PluginEntry) -> Unit,
     val onDismissBanner: () -> Unit,
@@ -144,10 +138,33 @@ data class HostActions(
 )
 
 /**
- * Root screen. Responsive by construction: a single scrolling column on phones,
- * a two-pane layout (plugins | console) from ~840dp, which covers large phones
- * in landscape, foldables, tablets and desktop-sized windows. The log console
- * can also take over the whole screen.
+ * The shell: three tabs, one screen at a time, and a way back.
+ *
+ * ### What changed, and why
+ * The first version was one screen that carried everything: an identity card
+ * with the import button, the plugin list, and a log console nailed to the
+ * bottom third. Every part of that was defensible on its own and the sum was
+ * not. The console is the tool's most valuable view *when a run misbehaves* and
+ * pure noise the rest of the time, and it was taking a third of the height from
+ * the list somebody opened the app to use; the four other screens were behind
+ * an overflow menu, which is where features go to be undiscovered.
+ *
+ * Three destinations answer the three questions the app is actually asked:
+ *
+ *  * **Plugins** - what do I have, and run it. The reason the app exists, and
+ *    now the whole screen.
+ *  * **Activity** - what is it doing, and what did it say. Where the console
+ *    lives: one tap away, never in the way, and badged when something went
+ *    wrong while you were elsewhere.
+ *  * **Settings** - everything you set once and forget, with diagnostics, help
+ *    and about as rows inside it rather than as entries in a hidden menu.
+ *
+ * The overflow menu is gone entirely. Nothing it held was worth hiding.
+ *
+ * ### Adaptive by construction
+ * A bottom bar below ~720dp, a navigation rail beside the content above it, and
+ * the content itself capped in width and centred - because a plugin card
+ * stretched across a tablet is harder to read than one that is not, not easier.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -164,191 +181,260 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
     }
 
     BackHandler(enabled = state.route != HostUiState.Route.PLUGINS) { actions.onBack() }
-    BackHandler(enabled = state.logsExpanded) { actions.onToggleLogs() }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets.systemBars,
-        topBar = {
-            // The console taking over the screen is a mode, not a place: a bar
-            // above it would only steal height from what the user asked to read.
-            if (!state.logsExpanded) ZetaTopBar(state, actions)
-        },
-    ) { padding ->
-        if (state.route != HostUiState.Route.PLUGINS) {
-            Box(Modifier.fillMaxSize().padding(padding)) {
-                when (state.route) {
-                    HostUiState.Route.APP_SETTINGS -> AppSettingsScreen(
-                        state = state,
-                        onTheme = actions.onTheme,
-                        onLogLevel = actions.onLevelChange,
-                        onNotifyResults = actions.onNotifyResults,
-                        onCheckUpdatesOnLaunch = actions.onCheckUpdatesOnLaunch,
-                        onReplayOnboarding = actions.onReplayOnboarding,
-                        onClearLogs = actions.onClearLogs,
-                    )
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = maxWidth >= 720.dp
+        val onTab = state.route.isTab
 
-                    HostUiState.Route.HELP -> HelpScreen()
-                    HostUiState.Route.DIAGNOSTICS -> DiagnosticsScreen(state, actions.onFixReadiness)
-                    HostUiState.Route.ABOUT -> AboutScreen(
-                        update = state.update,
-                        onCheckUpdates = actions.onCheckUpdates,
-                    )
-                    HostUiState.Route.PLUGINS -> Unit
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets.systemBars,
+            topBar = { ZetaTopBar(state, actions) },
+            bottomBar = { if (onTab && !wide) ZetaBottomBar(state, actions) },
+            floatingActionButton = {
+                // Only where it means something. A floating button that changes
+                // meaning per screen is a button nobody presses with confidence.
+                if (state.route == HostUiState.Route.PLUGINS && state.plugins.isNotEmpty()) {
+                    ImportButton(state, actions)
                 }
-            }
-            return@Scaffold
-        }
+            },
+        ) { padding ->
+            Row(Modifier.fillMaxSize().padding(padding)) {
+                if (onTab && wide) ZetaNavRail(state, actions)
 
-        BoxWithConstraints(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            val wide = maxWidth >= 840.dp
-            val availableHeight = maxHeight
-            val horizontalPadding = when {
-                maxWidth >= 1200.dp -> 48.dp
-                maxWidth >= 600.dp -> 28.dp
-                else -> 18.dp
-            }
-
-            when {
-                // Reading a long run is a first-class activity in a tool like
-                // this, so the console can take the whole screen.
-                state.logsExpanded -> LogConsole(
-                    records = state.filteredLogs,
-                    minLevel = state.minLevel,
-                    onLevelChange = actions.onLevelChange,
-                    onClear = actions.onClearLogs,
-                    expanded = true,
-                    onToggleExpand = actions.onToggleLogs,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = horizontalPadding, vertical = 12.dp),
-                )
-
-                wide -> Row(
-                    Modifier.fillMaxSize().padding(horizontal = horizontalPadding, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                ) {
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .widthIn(max = 720.dp)
-                            .fillMaxHeight(),
-                    ) {
-                        PluginPane(state, actions, Modifier.fillMaxSize())
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                    Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) {
+                        Destination(state, actions)
                     }
-                    LogConsole(
-                        records = state.filteredLogs,
-                        minLevel = state.minLevel,
-                        onLevelChange = actions.onLevelChange,
-                        onClear = actions.onClearLogs,
-                        onToggleExpand = actions.onToggleLogs,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                }
-
-                else -> Column(
-                    Modifier.fillMaxSize().padding(horizontal = horizontalPadding, vertical = 12.dp),
-                ) {
-                    PluginPane(state, actions, Modifier.weight(1f))
-                    Spacer(Modifier.height(14.dp))
-                    LogConsole(
-                        records = state.filteredLogs,
-                        minLevel = state.minLevel,
-                        onLevelChange = actions.onLevelChange,
-                        onClear = actions.onClearLogs,
-                        onToggleExpand = actions.onToggleLogs,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 168.dp, max = availableHeight * 0.34f)
-                            .height(availableHeight * 0.30f),
-                    )
                 }
             }
         }
     }
 
-    state.details?.let { details ->
-        PluginDetailsSheet(
-            details = details,
-            onDismiss = actions.onCloseDetails,
-            onRunFailing = { actions.onRunFailing(details.entry) },
-            onRunThrowing = { actions.onRunThrowing(details.entry) },
-            onShare = { actions.onShare(details.entry) },
-            onExport = { actions.onExport(details.entry) },
-            onUnload = { actions.onUnload(details.entry) },
-            onUninstall = { actions.onUninstall(details.entry) },
-            onViewCode = { actions.onViewCode(details.entry) },
-        )
-    }
+    Dialogs(state, actions)
+}
 
-    state.settingsDialog?.let { settings ->
-        PluginSettingsDialog(
-            state = settings,
-            onValueChange = actions.onSettingChange,
-            onPickFolder = actions.onPickFolder,
-            onAction = actions.onSettingsAction,
-            onSave = actions.onSaveSettings,
-            onReset = actions.onResetSettings,
-            onDismiss = actions.onCloseSettings,
-        )
-    }
+@Composable
+private fun Destination(state: HostUiState, actions: HostActions) {
+    when (state.route) {
+        HostUiState.Route.PLUGINS -> PluginPane(state, actions, Modifier.fillMaxSize())
 
-    state.scheduleDialog?.let { schedule ->
-        ScheduleDialog(
-            state = schedule,
-            onEdit = actions.onScheduleEdit,
-            onSave = actions.onScheduleSave,
-            onDismiss = actions.onScheduleClose,
+        HostUiState.Route.ACTIVITY -> ActivityScreen(
+            state = state,
+            onLevelChange = actions.onLevelChange,
+            onClearLogs = actions.onClearLogs,
+            onStop = actions.onStopRun,
         )
-    }
 
-    state.codeViewer?.let { viewer ->
-        CodeViewerDialog(
-            pluginName = viewer.pluginName,
-            files = viewer.files,
-            onDismiss = actions.onCloseCode,
+        HostUiState.Route.APP_SETTINGS -> AppSettingsScreen(
+            state = state,
+            onTheme = actions.onTheme,
+            onLogLevel = actions.onLevelChange,
+            onNotifyResults = actions.onNotifyResults,
+            onCheckUpdatesOnLaunch = actions.onCheckUpdatesOnLaunch,
+            onReplayOnboarding = actions.onReplayOnboarding,
+            onClearLogs = actions.onClearLogs,
+            onNavigate = actions.onNavigate,
         )
-    }
 
-    state.permissionPrompt?.let { prompt ->
-        PermissionRequestDialog(
-            pluginName = prompt.pluginName,
-            plan = prompt.plan,
-            onConfirm = { actions.onPermissionPromptResult(true) },
-            onDismiss = { actions.onPermissionPromptResult(false) },
-        )
-    }
-
-    state.specialAccessPrompt?.let { prompt ->
-        SpecialAccessDialog(
-            access = prompt.access,
-            reason = prompt.reason,
-            onConfirm = { actions.onSpecialAccessResult(true) },
-            onDismiss = { actions.onSpecialAccessResult(false) },
-        )
-    }
-
-    if (state.update.needsPermission) {
-        InstallPermissionDialog(
-            onOpenSettings = actions.onOpenInstallSettings,
-            onDismiss = actions.onDismissInstallPermission,
-        )
-    }
-
-    state.blockedDialog?.let { blocked ->
-        PermissionBlockedDialog(
-            title = stringResource(blocked.titleRes),
-            body = blocked.body,
-            canOpenSettings = blocked.canOpenSettings,
-            onOpenSettings = actions.onOpenAppSettings,
-            onDismiss = actions.onDismissBlocked,
+        HostUiState.Route.HELP -> HelpScreen()
+        HostUiState.Route.DIAGNOSTICS -> DiagnosticsScreen(state, actions.onFixReadiness)
+        HostUiState.Route.ABOUT -> AboutScreen(
+            update = state.update,
+            onCheckUpdates = actions.onCheckUpdates,
         )
     }
 }
+
+// -- navigation ---------------------------------------------------------------
+
+/**
+ * What each tab is called, drawn with, and badged with.
+ *
+ * The badges are the whole reason the bar is worth more than a menu: they are
+ * the app saying "something happened over here" without stealing the screen to
+ * say it.
+ */
+private data class TabSpec(
+    val route: HostUiState.Route,
+    val labelRes: Int,
+    val selectedIcon: ImageVector,
+    val icon: ImageVector,
+)
+
+private val TABS = listOf(
+    TabSpec(
+        HostUiState.Route.PLUGINS,
+        R.string.nav_plugins,
+        Icons.Filled.Extension,
+        Icons.Outlined.Extension,
+    ),
+    TabSpec(
+        HostUiState.Route.ACTIVITY,
+        R.string.nav_activity,
+        Icons.Filled.Terminal,
+        Icons.Outlined.Terminal,
+    ),
+    TabSpec(
+        HostUiState.Route.APP_SETTINGS,
+        R.string.nav_settings,
+        Icons.Filled.Tune,
+        Icons.Outlined.Tune,
+    ),
+)
+
+/**
+ * How many things this tab wants to tell you about.
+ *
+ * Activity counts warnings and errors written since you last looked; Settings
+ * counts what stops a scheduled run from happening, and only once something is
+ * actually scheduled - before that it would be advice about a feature nobody
+ * has used yet.
+ */
+@Composable
+private fun badgeFor(route: HostUiState.Route, state: HostUiState): Int = when {
+    // Never on the tab you are looking at. A badge means "something happened
+    // over there"; on the current screen it is the app telling you about
+    // something you can already see, which just makes it look stuck.
+    route == state.route -> 0
+    route == HostUiState.Route.ACTIVITY -> state.unseenIssues
+    route == HostUiState.Route.APP_SETTINGS ->
+        if (state.schedules.values.any { it.isAutomatic }) state.readiness?.blockingCount ?: 0 else 0
+
+    else -> 0
+}
+
+@Composable
+private fun ZetaBottomBar(state: HostUiState, actions: HostActions) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+        TABS.forEach { tab ->
+            val selected = state.route == tab.route
+            val badge = badgeFor(tab.route, state)
+            NavigationBarItem(
+                selected = selected,
+                onClick = { actions.onNavigate(tab.route) },
+                icon = { TabIcon(tab, selected, badge) },
+                label = { Text(stringResource(tab.labelRes)) },
+                alwaysShowLabel = true,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ZetaNavRail(state: HostUiState, actions: HostActions) {
+    NavigationRail(
+        containerColor = MaterialTheme.colorScheme.surface,
+        header = {
+            Spacer(Modifier.size(8.dp))
+            ZetaLogo(size = 32.dp)
+        },
+    ) {
+        Spacer(Modifier.size(8.dp))
+        TABS.forEach { tab ->
+            val selected = state.route == tab.route
+            val badge = badgeFor(tab.route, state)
+            NavigationRailItem(
+                selected = selected,
+                onClick = { actions.onNavigate(tab.route) },
+                icon = { TabIcon(tab, selected, badge) },
+                label = { Text(stringResource(tab.labelRes)) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TabIcon(tab: TabSpec, selected: Boolean, badge: Int) {
+    androidx.compose.material3.BadgedBox(
+        badge = {
+            if (badge > 0) {
+                Badge { Text(if (badge > 99) "99+" else badge.toString()) }
+            }
+        },
+    ) {
+        Icon(
+            imageVector = if (selected) tab.selectedIcon else tab.icon,
+            contentDescription = null,
+        )
+    }
+}
+
+/**
+ * The bar above everything.
+ *
+ * On a tab it is identity and nothing else - there is no menu left to put in
+ * it, which is the point. On a pushed screen it is the way back, which is the
+ * only thing it needs to be.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ZetaTopBar(state: HostUiState, actions: HostActions) {
+    val onTab = state.route.isTab
+    CenterAlignedTopAppBar(
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+        ),
+        navigationIcon = {
+            when {
+                !onTab -> IconButton(onClick = actions.onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.action_back),
+                    )
+                }
+
+                state.route == HostUiState.Route.PLUGINS ->
+                    Box(Modifier.padding(start = 14.dp)) { ZetaLogo(size = 30.dp) }
+
+                else -> Unit
+            }
+        },
+        title = {
+            Text(
+                stringResource(
+                    when (state.route) {
+                        HostUiState.Route.PLUGINS -> R.string.app_name
+                        HostUiState.Route.ACTIVITY -> R.string.nav_activity
+                        HostUiState.Route.APP_SETTINGS -> R.string.nav_settings
+                        HostUiState.Route.HELP -> R.string.help_title
+                        HostUiState.Route.DIAGNOSTICS -> R.string.diagnostics_title
+                        HostUiState.Route.ABOUT -> R.string.about_title
+                    }
+                ),
+                style = MaterialTheme.typography.titleMedium,
+            )
+        },
+    )
+}
+
+@Composable
+private fun ImportButton(state: HostUiState, actions: HostActions) {
+    ExtendedFloatingActionButton(
+        onClick = actions.onImport,
+        expanded = true,
+        icon = {
+            if (state.importing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            } else {
+                Icon(Icons.Filled.Add, contentDescription = null)
+            }
+        },
+        text = {
+            Text(
+                stringResource(
+                    if (state.importing) R.string.action_importing else R.string.action_import_plugin
+                )
+            )
+        },
+    )
+}
+
+// -- the plugin list ----------------------------------------------------------
 
 @Composable
 private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modifier = Modifier) {
@@ -365,10 +451,9 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
         state = listState,
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(bottom = 24.dp),
+        // Room for the floating button to sit over nothing important.
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
     ) {
-        item { HeaderCard(state, actions) }
-
         state.banner?.let { banner ->
             item { BannerCard(banner, actions.onDismissBanner) }
         }
@@ -390,19 +475,19 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
             }
         }
 
-        item {
-            val visible = state.visiblePlugins
-            SectionHeader(
-                title = stringResource(R.string.plugins_title),
-                subtitle = when {
-                    state.plugins.isEmpty() -> stringResource(R.string.plugins_none)
-                    visible.size != state.plugins.size ->
+        if (state.plugins.isNotEmpty()) {
+            item {
+                val visible = state.visiblePlugins
+                SectionHeader(
+                    title = stringResource(R.string.plugins_title),
+                    subtitle = if (visible.size != state.plugins.size) {
                         stringResource(R.string.plugins_filtered_count, visible.size, state.plugins.size)
-
-                    else -> stringResource(R.string.plugins_count, state.plugins.size)
-                },
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            )
+                    } else {
+                        stringResource(R.string.plugins_count, state.plugins.size)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         // The search box only earns its place once there is something to sift.
@@ -412,7 +497,7 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
 
         val visible = state.visiblePlugins
         when {
-            state.plugins.isEmpty() -> item { EmptyState() }
+            state.plugins.isEmpty() -> item { EmptyState(state, actions) }
             visible.isEmpty() -> item { NoMatchState(state.query) }
             else -> items(visible, key = { it.id }) { entry ->
                 PluginCard(
@@ -427,69 +512,6 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
                     onSchedule = { actions.onSchedule(entry) },
                     onOpenScreen = { actions.onOpenScreen(entry) },
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HeaderCard(state: HostUiState, actions: HostActions) {
-    Surface(
-        shape = RoundedCornerShape(26.dp),
-        color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.secondary,
-                            )
-                        )
-                    )
-            )
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ZetaLogo(size = 52.dp)
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            stringResource(R.string.app_name),
-                            style = MaterialTheme.typography.headlineMedium,
-                        )
-                        Text(
-                            stringResource(R.string.app_tagline),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                Button(
-                    onClick = actions.onImport,
-                    enabled = !state.importing,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    if (state.importing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(stringResource(R.string.action_importing).uppercase())
-                    } else {
-                        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Text(stringResource(R.string.action_import_plugin).uppercase())
-                    }
-                }
             }
         }
     }
@@ -580,17 +602,24 @@ private fun BannerCard(banner: HostUiState.Banner, onDismiss: () -> Unit) {
     }
 }
 
+/**
+ * The first screen anybody sees, and the only one that has to teach.
+ *
+ * It carries its own button rather than relying on the floating one, because
+ * with nothing installed there is no list for a floating button to float over -
+ * and a first action hidden in a corner is a first action not taken.
+ */
 @Composable
-private fun EmptyState() {
+private fun EmptyState(state: HostUiState, actions: HostActions) {
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
     ) {
         Column(
             Modifier.fillMaxWidth().padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Surface(
                 shape = RoundedCornerShape(18.dp),
@@ -610,100 +639,111 @@ private fun EmptyState() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+            Spacer(Modifier.size(4.dp))
+            Button(
+                onClick = actions.onImport,
+                enabled = !state.importing,
+                shape = RoundedCornerShape(14.dp),
+            ) {
+                if (state.importing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                } else {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(
+                        if (state.importing) R.string.action_importing else R.string.action_import_plugin
+                    )
+                )
+            }
         }
     }
 }
 
-/**
- * The bar above everything: identity on the left, the way out of a sub-screen,
- * and the menu.
- *
- * The menu icon carries a badge when the system is not ready for scheduled runs
- * — the one piece of state that is worth interrupting a user about, because
- * without it their schedules quietly do nothing.
- */
-@OptIn(ExperimentalMaterial3Api::class)
+// -- everything that opens over the top ---------------------------------------
+
 @Composable
-private fun ZetaTopBar(state: HostUiState, actions: HostActions) {
-    var menuOpen by remember { mutableStateOf(false) }
-    val onRoot = state.route == HostUiState.Route.PLUGINS
-    val problems = if (state.schedules.values.any { it.isAutomatic }) {
-        state.readiness?.blockingCount ?: 0
-    } else {
-        0
+private fun Dialogs(state: HostUiState, actions: HostActions) {
+    state.details?.let { details ->
+        PluginDetailsSheet(
+            details = details,
+            onDismiss = actions.onCloseDetails,
+            onRunFailing = { actions.onRunFailing(details.entry) },
+            onRunThrowing = { actions.onRunThrowing(details.entry) },
+            onShare = { actions.onShare(details.entry) },
+            onExport = { actions.onExport(details.entry) },
+            onUnload = { actions.onUnload(details.entry) },
+            onUninstall = { actions.onUninstall(details.entry) },
+            onViewCode = { actions.onViewCode(details.entry) },
+        )
     }
 
-    CenterAlignedTopAppBar(
-        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background,
-        ),
-        navigationIcon = {
-            if (onRoot) {
-                Box(Modifier.padding(start = 14.dp)) { ZetaLogo(size = 30.dp) }
-            } else {
-                IconButton(onClick = actions.onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.action_back),
-                    )
-                }
-            }
-        },
-        title = {
-            Text(
-                stringResource(
-                    when (state.route) {
-                        HostUiState.Route.PLUGINS -> R.string.app_name
-                        HostUiState.Route.APP_SETTINGS -> R.string.app_settings_title
-                        HostUiState.Route.HELP -> R.string.help_title
-                        HostUiState.Route.DIAGNOSTICS -> R.string.diagnostics_title
-                        HostUiState.Route.ABOUT -> R.string.about_title
-                    }
-                ),
-                style = MaterialTheme.typography.titleMedium,
-            )
-        },
-        actions = {
-            IconButton(onClick = { menuOpen = true }) {
-                BadgedBox(
-                    badge = { if (problems > 0) Badge { Text(problems.toString()) } },
-                ) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.menu_open))
-                }
-            }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                MenuEntry(R.string.menu_app_settings, Icons.Outlined.Tune) {
-                    menuOpen = false
-                    actions.onNavigate(HostUiState.Route.APP_SETTINGS)
-                }
-                MenuEntry(R.string.menu_help, Icons.Outlined.HelpOutline) {
-                    menuOpen = false
-                    actions.onNavigate(HostUiState.Route.HELP)
-                }
-                MenuEntry(R.string.menu_diagnostics, Icons.Outlined.MonitorHeart, badge = problems) {
-                    menuOpen = false
-                    actions.onNavigate(HostUiState.Route.DIAGNOSTICS)
-                }
-                MenuEntry(R.string.menu_about, Icons.Outlined.Info) {
-                    menuOpen = false
-                    actions.onNavigate(HostUiState.Route.ABOUT)
-                }
-            }
-        },
-    )
-}
+    state.settingsDialog?.let { settings ->
+        PluginSettingsDialog(
+            state = settings,
+            onValueChange = actions.onSettingChange,
+            onPickFolder = actions.onPickFolder,
+            onAction = actions.onSettingsAction,
+            onSave = actions.onSaveSettings,
+            onReset = actions.onResetSettings,
+            onDismiss = actions.onCloseSettings,
+        )
+    }
 
-@Composable
-private fun MenuEntry(
-    labelRes: Int,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    badge: Int = 0,
-    onClick: () -> Unit,
-) {
-    DropdownMenuItem(
-        text = { Text(stringResource(labelRes)) },
-        leadingIcon = { Icon(icon, contentDescription = null) },
-        trailingIcon = { if (badge > 0) Badge { Text(badge.toString()) } },
-        onClick = onClick,
-    )
+    state.scheduleDialog?.let { schedule ->
+        ScheduleDialog(
+            state = schedule,
+            onEdit = actions.onScheduleEdit,
+            onSave = actions.onScheduleSave,
+            onDismiss = actions.onScheduleClose,
+        )
+    }
+
+    state.codeViewer?.let { viewer ->
+        CodeViewerDialog(
+            pluginName = viewer.pluginName,
+            files = viewer.files,
+            onDismiss = actions.onCloseCode,
+        )
+    }
+
+    state.permissionPrompt?.let { prompt ->
+        PermissionRequestDialog(
+            pluginName = prompt.pluginName,
+            plan = prompt.plan,
+            onConfirm = { actions.onPermissionPromptResult(true) },
+            onDismiss = { actions.onPermissionPromptResult(false) },
+        )
+    }
+
+    state.specialAccessPrompt?.let { prompt ->
+        SpecialAccessDialog(
+            access = prompt.access,
+            reason = prompt.reason,
+            onConfirm = { actions.onSpecialAccessResult(true) },
+            onDismiss = { actions.onSpecialAccessResult(false) },
+        )
+    }
+
+    if (state.update.needsPermission) {
+        InstallPermissionDialog(
+            onOpenSettings = actions.onOpenInstallSettings,
+            onDismiss = actions.onDismissInstallPermission,
+        )
+    }
+
+    state.blockedDialog?.let { blocked ->
+        PermissionBlockedDialog(
+            title = stringResource(blocked.titleRes),
+            body = blocked.body,
+            canOpenSettings = blocked.canOpenSettings,
+            onOpenSettings = actions.onOpenAppSettings,
+            onDismiss = actions.onDismissBlocked,
+        )
+    }
 }
