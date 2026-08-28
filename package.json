@@ -1,6 +1,6 @@
 {
   "name": "zetaforge-workspace",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "private": true,
   "description": "ZetaForge — the Android plugin runtime (app/) and the zeta CLI (zeta-cli/).",
   "license": "SEE LICENSE IN LICENSE",
