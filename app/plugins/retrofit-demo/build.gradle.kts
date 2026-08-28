@@ -94,7 +94,7 @@ zetaPlugin {
 
     // Host API range this plugin was built against.
     minHostApi.set(1)
-    maxHostApi.set(4)
+    maxHostApi.set(5)
 
     // Permissions: declare only what you use, and say why. The Host shows the
     // reason to the user and asks for it at START, every time it is missing.

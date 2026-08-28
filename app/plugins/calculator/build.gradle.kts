@@ -78,7 +78,7 @@ zetaPlugin {
     )
     entryPoint.set("com.zetaforge.plugins.calculator.CalculatorPlugin")
     minHostApi.set(4)
-    maxHostApi.set(4)
+    maxHostApi.set(5)
 
     // This plugin is its screen. The Host hides RUN and SCHEDULE for it, which
     // is the honest thing to do: there is nothing to run when nobody is looking.

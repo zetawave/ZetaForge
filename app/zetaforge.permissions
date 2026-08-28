@@ -60,6 +60,12 @@ android.permission.BLUETOOTH_CONNECT
 android.permission.BLUETOOTH_ADVERTISE
 android.permission.NEARBY_WIFI_DEVICES
 
+# --- Messaging -------------------------------------------------------------
+# The fallback for a plugin whose whole point is reaching somebody: SMS travels
+# where mobile data does not, which in a valley or a tunnel is the difference
+# between a last known position and none at all.
+android.permission.SEND_SMS
+
 # --- Personal data ---------------------------------------------------------
 android.permission.READ_CONTACTS
 android.permission.WRITE_CONTACTS

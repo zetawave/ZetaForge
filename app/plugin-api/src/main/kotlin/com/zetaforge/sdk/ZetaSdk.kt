@@ -25,12 +25,16 @@ object ZetaSdk {
      *     ZetaSetting.Action buttons served by ZetaPlugin.runAction().
      * 4 - adds screens: com.zetaforge.sdk.ui.ZetaUiPlugin, drawn by the Host in
      *     a container Activity with Compose it provides. See [UI_API_VERSION].
+     * 5 - adds ZetaHost: an Intent back to a plugin's own screen, and a
+     *     watchdog that restarts a long run the system killed and brings it
+     *     back after a reboot. All three need a component declared in an
+     *     installed manifest, which a plugin does not have.
      *
      * Additions are backwards compatible: a plugin built against API 1 runs
      * unchanged on a Host implementing API 2 (see `maxHostApi` handling in the
      * runtime, which warns instead of refusing).
      */
-    const val HOST_API_VERSION: Int = 4
+    const val HOST_API_VERSION: Int = 5
 
     /** Lowest Host API version this SDK still knows how to talk to. */
     const val MIN_SUPPORTED_PLUGIN_API: Int = 1

@@ -36,7 +36,35 @@ class ScheduleReceiver : BroadcastReceiver() {
                     try {
                         app.runtime.refresh()
                         ScheduleAlarms.rescheduleAll(context, app.runtime)
+                        // A reboot drops these too, and a plugin that was
+                        // sharing a live position when the phone restarted is
+                        // exactly the one that must come back by itself.
+                        KeepAliveAlarms.restoreAll(context)
                         reportMissed(context, app)
+                    } finally {
+                        pending.finish()
+                    }
+                }
+            }
+
+            KeepAliveAlarms.ACTION_KEEP_ALIVE -> {
+                val pluginId = intent.getStringExtra(KeepAliveAlarms.EXTRA_PLUGIN_ID) ?: return
+                val pending = goAsync()
+                app.scope.launch {
+                    try {
+                        if (app.runtime.plugins.value.isEmpty()) app.runtime.refresh()
+                        val entry = app.runtime.plugins.value.firstOrNull { it.id == pluginId }
+                        if (entry == null) {
+                            // Uninstalled while an alarm was pending: let the
+                            // chain end here rather than waking the phone for
+                            // something that no longer exists.
+                            KeepAliveAlarms.cancel(context, pluginId)
+                            return@launch
+                        }
+                        KeepAliveAlarms.rearm(context, pluginId)
+                        val needsLocation = entry.installed.manifest.permissions
+                            .any { it.name.endsWith("_LOCATION") }
+                        KeepAliveAlarms.fire(context, pluginId, needsLocation)
                     } finally {
                         pending.finish()
                     }
