@@ -8,7 +8,14 @@
  *   npm run release:cli:dry       everything except tagging and publishing
  *
  * Flags: --skip-tests, --yes, --force, --version <v>, --bump <kind>,
- *        --otp <code> (when the npm token does not bypass 2FA)
+ *        --otp <code>  (type the code yourself)
+ *        --no-web      (turn the browser flow off)
+ *
+ * Two-factor authentication goes through the browser by default: npm prints a
+ * link, you approve there, and the publish continues. Typing a six-digit code
+ * into a terminal is the other option and not the good one - the code expires
+ * in thirty seconds, and by the time a release script has built, tested and
+ * packed, half of that is gone.
  *
  * The APK is not built here and no GitHub release is created: the tag
  * `cli-v<version>` triggers the Release (CLI) workflow, which attaches the
@@ -196,15 +203,50 @@ function publishedVersions() {
 }
 
 /**
- * Publishes, and turns npm's most likely refusals into an instruction.
+ * Publishes, through the browser when two-factor authentication is on.
  *
- * None of them are obvious from npm's own output: the name can belong to
- * somebody else, a token can be read-only, and a token that keeps 2FA on needs
- * a one-time password that this script cannot be prompted for.
+ * ### Why the terminal is not where a one-time password belongs
+ * The first version piped npm's output so that its refusals could be turned
+ * into instructions. That is also what made the browser flow impossible: npm
+ * asks for the second factor by printing a link and *waiting*, and a child
+ * process whose output is being captured can neither show the link nor be
+ * answered. The result was a release that had built, tested, packed, committed
+ * and tagged, and then died at the last step asking for a code that expires
+ * before it can be typed.
+ *
+ * The fix is the terminal, not a flag: npm already defaults to `auth-type=web`
+ * and prints the link by itself, but only when it has a TTY to print it into.
+ * So the default path hands stdio straight through - the link appears, the
+ * browser approves it, the publish continues - and `--auth-type=web` is passed
+ * explicitly only to survive a machine where that config was set to `legacy`.
+ * Only the `--otp` path keeps the old capture-and-classify behaviour, because
+ * there the answer is already known and nothing has to be interactive.
  */
 function publishToNpm() {
+  // `parseArgs` turns a bare flag into `true`, so the negative form arrives as
+  // `no-web` rather than as `web: false`.
+  const web = args["no-web"] !== true && !args.otp;
+
   const publishArgs = ["publish", "--access", "public"];
   if (args.otp) publishArgs.push("--otp", String(args.otp));
+  if (web) publishArgs.push("--auth-type", "web");
+
+  if (web) {
+    info("two-factor authentication goes through the browser;");
+    info("npm prints a link below - open it and approve, publishing continues by itself");
+    // Inherited, not captured: this is the whole point. npm needs a terminal to
+    // print the link into and to wait on.
+    const result = spawnTool("npm", publishArgs, { cwd: cli, stdio: "inherit" });
+    if (result.status === 0) return;
+    fail(
+      "npm publish failed.",
+      "npm's own output is above. If it still asked for a code rather than a link,\n" +
+        "    the token in ~/.npmrc does not support the web flow - run once:\n" +
+        "        npm login --auth-type=web\n" +
+        "    and release again. To type the code instead:\n" +
+        "        npm run release:cli -- --otp 123456",
+    );
+  }
 
   const result = spawnTool("npm", publishArgs, { cwd: cli, stdio: "pipe" });
   process.stdout.write(result.stdout || "");
@@ -217,9 +259,9 @@ function publishToNpm() {
   if (/one-time pass|EOTP|otp/i.test(output)) {
     fail(
       "npm wants a one-time password.",
-      "This token does not bypass 2FA. Either:\n" +
-        "    re-run with the code:  npm run release:cli -- --otp 123456\n" +
-        '    or issue a token with "Bypass two-factor authentication" enabled.',
+      "The code given was wrong or had already expired. Either:\n" +
+        "    let the browser do it:  npm run release:cli\n" +
+        "    or try again with a fresh code:  npm run release:cli -- --otp 123456",
     );
   }
   if (/403|forbidden|not allowed to publish/i.test(output)) {
