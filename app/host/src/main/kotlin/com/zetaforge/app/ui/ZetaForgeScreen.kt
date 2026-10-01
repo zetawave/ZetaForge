@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -111,7 +113,6 @@ data class HostActions(
     val onClearLogs: () -> Unit,
     val onStopRun: () -> Unit,
     val onQueryChange: (String) -> Unit,
-    val onToggleCard: (PluginEntry) -> Unit,
     val onDismissBanner: () -> Unit,
     val onPermissionPromptResult: (Boolean) -> Unit,
     val onSpecialAccessResult: (Boolean) -> Unit,
@@ -204,7 +205,7 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
 
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                     Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) {
-                        Destination(state, actions)
+                        Destination(state, actions, wide)
                     }
                 }
             }
@@ -215,9 +216,9 @@ fun ZetaForgeScreen(state: HostUiState, actions: HostActions) {
 }
 
 @Composable
-private fun Destination(state: HostUiState, actions: HostActions) {
+private fun Destination(state: HostUiState, actions: HostActions, wide: Boolean) {
     when (state.route) {
-        HostUiState.Route.PLUGINS -> PluginPane(state, actions, Modifier.fillMaxSize())
+        HostUiState.Route.PLUGINS -> PluginPane(state, actions, wide, Modifier.fillMaxSize())
 
         HostUiState.Route.ACTIVITY -> ActivityScreen(
             state = state,
@@ -436,9 +437,20 @@ private fun ImportButton(state: HostUiState, actions: HostActions) {
 
 // -- the plugin list ----------------------------------------------------------
 
+/**
+ * The plugin list, as an adaptive grid.
+ *
+ * One column on a phone: a plugin row is a name and a verb, and names want to
+ * be scanned down a single line of sight. Two columns from 720dp: the rows are
+ * dense enough that half the width would sit empty, and a collection you can
+ * see whole is one you can navigate by memory.
+ *
+ * Everything that is not a plugin - banners, the search field, the section
+ * header - spans the full width, so the grid only shapes the cards themselves.
+ */
 @Composable
-private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modifier = Modifier) {
-    val listState = rememberLazyListState()
+private fun PluginPane(state: HostUiState, actions: HostActions, wide: Boolean, modifier: Modifier = Modifier) {
+    val listState = rememberLazyGridState()
 
     // The banner sits at the top of the list, so from anywhere further down it
     // would announce itself off-screen - and an answer nobody sees is the same
@@ -447,26 +459,30 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
         if (state.banner != null) listState.animateScrollToItem(0)
     }
 
-    LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(if (wide) 2 else 1),
         state = listState,
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         // Room for the floating button to sit over nothing important.
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
     ) {
         state.banner?.let { banner ->
-            item { BannerCard(banner, actions.onDismissBanner) }
+            item(span = { GridItemSpan(maxLineSpan) }) { BannerCard(banner, actions.onDismissBanner) }
         }
 
         if (state.update.available != null) {
-            item { UpdateCard(state.update, actions.onDownloadUpdate, actions.onDismissUpdate) }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                UpdateCard(state.update, actions.onDownloadUpdate, actions.onDismissUpdate)
+            }
         }
 
         // Only once something is actually scheduled: before that, asking for
         // battery exemptions is noise.
         val anyScheduled = state.schedules.values.any { it.isAutomatic }
         if (anyScheduled && state.readiness?.allGood == false) {
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 ReadinessPanel(
                     readiness = state.readiness,
                     onFix = actions.onFixReadiness,
@@ -476,7 +492,7 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
         }
 
         if (state.plugins.isNotEmpty()) {
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 val visible = state.visiblePlugins
                 SectionHeader(
                     title = stringResource(R.string.plugins_title),
@@ -492,25 +508,20 @@ private fun PluginPane(state: HostUiState, actions: HostActions, modifier: Modif
 
         // The search box only earns its place once there is something to sift.
         if (state.plugins.size > 1 || state.query.isNotEmpty()) {
-            item { SearchField(state.query, actions.onQueryChange) }
+            item(span = { GridItemSpan(maxLineSpan) }) { SearchField(state.query, actions.onQueryChange) }
         }
 
         val visible = state.visiblePlugins
         when {
-            state.plugins.isEmpty() -> item { EmptyState(state, actions) }
-            visible.isEmpty() -> item { NoMatchState(state.query) }
+            state.plugins.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) { EmptyState(state, actions) }
+            visible.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) { NoMatchState(state.query) }
             else -> items(visible, key = { it.id }) { entry ->
                 PluginCard(
                     entry = entry,
-                    expanded = state.isExpanded(entry.id),
                     schedule = state.scheduleOf(entry.id),
-                    onToggleExpanded = { actions.onToggleCard(entry) },
                     onStart = { actions.onStart(entry) },
+                    onOpen = { actions.onOpenScreen(entry) },
                     onDetails = { actions.onDetails(entry) },
-                    onViewCode = { actions.onViewCode(entry) },
-                    onSettings = { actions.onSettings(entry) },
-                    onSchedule = { actions.onSchedule(entry) },
-                    onOpenScreen = { actions.onOpenScreen(entry) },
                 )
             }
         }
@@ -673,6 +684,15 @@ private fun Dialogs(state: HostUiState, actions: HostActions) {
         PluginDetailsSheet(
             details = details,
             onDismiss = actions.onCloseDetails,
+            onStart = { actions.onStart(details.entry) },
+            onOpenScreen = {
+                // The screen is an Activity on top; the sheet has nothing left
+                // to say once it is in front, so it closes rather than waiting.
+                actions.onCloseDetails()
+                actions.onOpenScreen(details.entry)
+            },
+            onSettings = { actions.onSettings(details.entry) },
+            onSchedule = { actions.onSchedule(details.entry) },
             onRunFailing = { actions.onRunFailing(details.entry) },
             onRunThrowing = { actions.onRunThrowing(details.entry) },
             onShare = { actions.onShare(details.entry) },

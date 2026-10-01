@@ -51,7 +51,6 @@ data class HostUiState(
     val logs: List<ZetaLogRecord> = emptyList(),
     val minLevel: ZetaLogLevel = ZetaLogLevel.DEBUG,
     val query: String = "",
-    val expandedPlugins: Set<String> = emptySet(),
     /** The run in flight, from the process-wide task centre. Null when idle. */
     val runningTask: RunningTask? = null,
     /**
@@ -117,8 +116,6 @@ data class HostUiState(
                 ).any { it.contains(needle, ignoreCase = true) }
             }
         }
-
-    fun isExpanded(pluginId: String): Boolean = expandedPlugins.contains(pluginId)
 
     fun scheduleOf(pluginId: String): Schedule = schedules[pluginId] ?: Schedule.manual(pluginId)
 
@@ -252,7 +249,6 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
     ) { base, plugins, logs, schedules, prefs ->
         base.copy(
             plugins = plugins.sortedBy { it.installed.displayName },
-            expandedPlugins = base.expandedPlugins.intersect(plugins.map { it.id }.toSet()),
             logs = logs,
             schedules = schedules,
             preferences = prefs,
@@ -804,14 +800,6 @@ class HostViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setQuery(query: String) {
         ui.value = ui.value.copy(query = query)
-    }
-
-    /** Expand/collapse one card; several can stay open at once. */
-    fun togglePluginExpanded(pluginId: String) {
-        val current = ui.value.expandedPlugins
-        ui.value = ui.value.copy(
-            expandedPlugins = if (current.contains(pluginId)) current - pluginId else current + pluginId,
-        )
     }
 
     fun setMinLevel(level: ZetaLogLevel) {
