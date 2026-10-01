@@ -40,8 +40,6 @@
     <string name="plugins_search_clear">Cancella ricerca</string>
     <string name="plugins_search_empty">Nessun plugin corrisponde a \"%1$s\".</string>
     <string name="plugins_filtered_count">%1$d di %2$d</string>
-    <string name="action_expand_card">Mostra dettagli</string>
-    <string name="action_collapse_card">Nascondi dettagli</string>
     <string name="code_wrap_lines">A capo automatico</string>
     <string name="plugin_by_author">di %1$s</string>
     <string name="plugin_version">v%1$s</string>
@@ -112,6 +110,7 @@
     <string name="details_scenario_unreachable">Host irraggiungibile</string>
     <string name="details_scenario_throw">Eccezione</string>
     <string name="details_no_description">Nessuna descrizione disponibile.</string>
+    <string name="details_manage">Gestione</string>
     <string name="details_unsigned">non firmato</string>
     <string name="details_not_loaded">non ancora caricato</string>
     <string name="details_field_plugin_id">ID plugin</string>

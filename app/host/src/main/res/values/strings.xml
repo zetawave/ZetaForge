@@ -45,8 +45,6 @@
     <string name="plugins_search_clear">Clear search</string>
     <string name="plugins_search_empty">No plugin matches \"%1$s\".</string>
     <string name="plugins_filtered_count">%1$d of %2$d</string>
-    <string name="action_expand_card">Show details</string>
-    <string name="action_collapse_card">Hide details</string>
     <string name="code_wrap_lines">Wrap lines</string>
     <string name="plugin_by_author">by %1$s</string>
     <string name="plugin_version">v%1$s</string>
@@ -117,6 +115,7 @@
     <string name="details_scenario_unreachable">Unreachable host</string>
     <string name="details_scenario_throw">Throw</string>
     <string name="details_no_description">No description provided.</string>
+    <string name="details_manage">Manage</string>
     <string name="details_unsigned">unsigned</string>
     <string name="details_not_loaded">not loaded yet</string>
     <string name="details_field_plugin_id">Plugin id</string>

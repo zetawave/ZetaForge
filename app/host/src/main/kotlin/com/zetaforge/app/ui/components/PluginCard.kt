@@ -1,11 +1,12 @@
 package com.zetaforge.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,90 +14,96 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.outlined.Code
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.OpenInFull
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zetaforge.app.R
 import com.zetaforge.app.ui.ScheduleFormatter
-import com.zetaforge.runtime.schedule.Schedule
-import com.zetaforge.app.ui.theme.MonoStyle
 import com.zetaforge.app.ui.theme.zetaAccents
 import com.zetaforge.runtime.PluginEntry
+import com.zetaforge.runtime.schedule.Schedule
 import com.zetaforge.sdk.PluginResult
+import com.zetaforge.sdk.PluginState
 
 /**
- * Card rendering one installed plugin.
+ * One row of the plugin list.
  *
- * Collapsed it shows only what identifies the plugin - name, version, author,
- * state - plus START, so a long list stays readable. Expanding reveals the
- * description, the permissions it will ask for, package facts and the last
- * result. Purely presentational: every action is a callback, no runtime call
- * happens inside a composable.
+ * Collapsed it is a single dense line - who the plugin is, what state it is in,
+ * and the one action that matters. A list that carries four buttons per card is
+ * a wall of buttons, not a list, so everything else (settings, schedule, source,
+ * management) lives one tap away in the details sheet, which the card itself
+ * opens.
+ *
+ * State is a small LED on the corner of the logo rather than a pill of text:
+ * colour carries it in the periphery, and the one case worth words - the last
+ * result - gets its own line.
+ *
+ * Purely presentational: every action is a callback, no runtime call happens
+ * inside a composable.
  */
 @Composable
 fun PluginCard(
     entry: PluginEntry,
-    expanded: Boolean,
     schedule: Schedule,
-    onToggleExpanded: () -> Unit,
     onStart: () -> Unit,
+    onOpen: () -> Unit,
     onDetails: () -> Unit,
-    onViewCode: () -> Unit,
-    onSettings: () -> Unit,
-    onSchedule: () -> Unit,
-    onOpenScreen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val accents = zetaAccents()
     val manifest = entry.installed.manifest
-    val chevronRotation by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
+    val busy = entry.isBusy
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column {
+            // A run in progress announces itself on the card's top edge: visible
+            // from across the list, impossible to mistake for decoration.
+            AnimatedVisibility(visible = busy) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = accents.info,
+                    trackColor = Color.Transparent,
+                )
+            }
 
-            // --- always visible: who this plugin is ---------------------------
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onToggleExpanded),
+                    .clickable(onClick = onDetails)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // The product's own mark rather than a generic icon: this is a
-                // ZetaForge plugin, and the card should say so at a glance.
-                ZetaLogo(size = 38.dp)
-                Spacer(Modifier.width(12.dp))
+                LogoWithLed(entry.state)
+
                 Column(Modifier.weight(1f)) {
                     // The name gets the line to itself. Sharing it with the
                     // version meant a plugin called anything real - "Live
@@ -110,6 +117,10 @@ fun PluginCard(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
+                        // Author and version only: the row shares its width with
+                        // the action button, and a byline that truncates is worse
+                        // than a short byline. Size and the rest live in the
+                        // details sheet.
                         text = buildString {
                             if (manifest.author.isNotBlank()) {
                                 append(stringResource(R.string.plugin_by_author, manifest.author))
@@ -126,262 +137,126 @@ fun PluginCard(
                         Spacer(Modifier.height(4.dp))
                         SchedulePill(schedule)
                     }
-                }
-                Spacer(Modifier.width(8.dp))
-                StatePill(entry.state)
-                IconButton(onClick = onToggleExpanded) {
-                    Icon(
-                        Icons.Filled.ExpandMore,
-                        contentDescription = stringResource(
-                            if (expanded) R.string.action_collapse_card else R.string.action_expand_card
-                        ),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.rotate(chevronRotation),
-                    )
-                }
-            }
-
-            // A run in progress, or its outcome, stays visible when collapsed:
-            // it is the reason you came back to the screen.
-            AnimatedVisibility(visible = entry.isBusy) {
-                Column {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().height(3.dp),
-                        color = accents.info,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        stringResource(R.string.action_running).uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = accents.info,
-                    )
-                }
-            }
-
-            entry.lastResult?.let { result ->
-                ResultBanner(result, compact = !expanded)
-            }
-
-            // --- expanded only -----------------------------------------------
-            AnimatedVisibility(visible = expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        entry.installed.id,
-                        style = MonoStyle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-
-                    if (manifest.description.isNotBlank()) {
-                        Text(
-                            manifest.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
-                    if (manifest.permissions.isNotEmpty() || manifest.specialAccess.isNotEmpty()) {
-                        PermissionSummary(entry)
-                    }
-
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        MetaChip(formatSize(entry.installed.sizeBytes))
-                        MetaChip("sha " + entry.installed.sha256.take(10))
-                        MetaChip("api " + manifest.minHostApi + ".." + manifest.maxHostApi)
-                        entry.loaderStrategy?.let { MetaChip(it.lowercase().replace('_', '-')) }
+                    entry.lastResult?.takeIf { !busy }?.let { result ->
+                        Spacer(Modifier.height(4.dp))
+                        ResultLine(result)
                     }
                 }
-            }
 
-            // --- actions ------------------------------------------------------
-            // A plugin with a screen leads with OPEN: for a screen-only one it
-            // is the only thing that means anything, and for a plugin that is
-            // both it is the action a person came to the card for.
-            if (manifest.hasUi) {
-                Button(
-                    onClick = onOpenScreen,
-                    modifier = Modifier.fillMaxWidth().height(46.dp),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Icon(
-                        Icons.Outlined.OpenInFull,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        manifest.ui?.label?.takeIf { it.isNotBlank() }
-                            ?: stringResource(R.string.action_open).uppercase()
-                    )
-                }
-            }
-
-            // RUN is hidden for a screen-only plugin: its `execute` exists
-            // because the contract requires one, and pressing it would do
-            // nothing a user could want.
-            if (!manifest.isUiOnly) {
-                Button(
-                    onClick = onStart,
-                    enabled = !entry.isBusy,
-                    modifier = Modifier.fillMaxWidth().height(46.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = if (manifest.hasUi) {
-                        ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary,
-                        )
-                    } else {
-                        ButtonDefaults.buttonColors()
-                    },
-                ) {
-                    if (entry.isBusy) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.action_running).uppercase())
-                    } else {
-                        Text(stringResource(R.string.action_start).uppercase())
-                    }
-                }
-            }
-
-            AnimatedVisibility(visible = expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(
-                            onClick = onSettings,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                        ) {
-                            Icon(Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.action_settings).uppercase(), maxLines = 1)
-                        }
-                        // Scheduling something that only exists while someone is
-                        // looking at it is meaningless, so it is not offered.
-                        if (!manifest.isUiOnly) {
-                            OutlinedButton(
-                                onClick = onSchedule,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                            ) {
-                                Icon(Icons.Outlined.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text(stringResource(R.string.action_schedule).uppercase(), maxLines = 1)
-                            }
-                        }
-                    }
-
-                    if (schedule.isAutomatic) ScheduleSummary(schedule)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(
-                            onClick = onViewCode,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                        ) {
-                            Icon(Icons.Outlined.Code, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.action_view_code).uppercase(), maxLines = 1)
-                        }
-                        OutlinedButton(
-                            onClick = onDetails,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                        ) {
-                            Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.action_details).uppercase(), maxLines = 1)
-                        }
-                    }
-                }
+                CardAction(entry, onStart, onOpen)
             }
         }
     }
 }
 
-/** What this plugin will ask the user for, before they ever tap START. */
+/**
+ * The card's single action: OPEN for a plugin with a screen, RUN otherwise.
+ * A run started on a card is confirmed by the spinner inside the same button.
+ */
 @Composable
-private fun PermissionSummary(entry: PluginEntry) {
-    val accents = zetaAccents()
+private fun CardAction(entry: PluginEntry, onStart: () -> Unit, onOpen: () -> Unit) {
     val manifest = entry.installed.manifest
-    Surface(
+    val hasScreen = manifest.hasUi
+
+    Button(
+        onClick = if (hasScreen) onOpen else onStart,
+        enabled = !entry.isBusy,
+        modifier = Modifier.height(40.dp),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        modifier = Modifier.fillMaxWidth(),
+        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+        colors = if (hasScreen) {
+            ButtonDefaults.filledTonalButtonColors()
+        } else {
+            ButtonDefaults.buttonColors()
+        },
     ) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.Top) {
+        if (entry.isBusy) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        } else {
             Icon(
-                Icons.Outlined.Lock,
+                imageVector = if (hasScreen) Icons.Outlined.OpenInFull else Icons.Filled.PlayArrow,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp),
             )
-            Spacer(Modifier.width(8.dp))
-            Column {
-                Text(
-                    stringResource(R.string.permissions_title),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    manifest.permissions.forEach { permission ->
-                        MetaChip(permission.shortName + if (permission.optional) " ?" else "")
-                    }
-                    manifest.specialAccess.forEach { access ->
-                        MetaChip(access.access.label, tint = accents.warning)
-                    }
-                }
-            }
         }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = when {
+                entry.isBusy -> stringResource(R.string.action_running)
+                hasScreen -> manifest.ui?.label?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.action_open)
+
+                else -> stringResource(R.string.action_start)
+            },
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+        )
     }
 }
 
+/**
+ * The product's own mark with a status LED on its corner. The mark says what
+ * kind of thing the row is; the LED says how it is doing right now.
+ */
 @Composable
-private fun ResultBanner(result: PluginResult, compact: Boolean) {
+private fun LogoWithLed(state: PluginState) {
+    val accents = zetaAccents()
+    val led = when (state) {
+        PluginState.SUCCESS -> accents.success
+        PluginState.FAILED -> accents.danger
+        PluginState.RUNNING, PluginState.STARTING, PluginState.LOADING -> accents.info
+        PluginState.LOADED -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.outline
+    }
+    Box(Modifier.size(44.dp)) {
+        ZetaLogo(size = 44.dp)
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .size(11.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(2.dp)
+                .clip(CircleShape)
+                .background(led),
+        )
+    }
+}
+
+/** The last outcome in one line: a coloured dot and the message, trimmed. */
+@Composable
+private fun ResultLine(result: PluginResult) {
     val accents = zetaAccents()
     val color = when (result) {
         is PluginResult.Success -> accents.success
         is PluginResult.Failure -> accents.danger
     }
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = color.copy(alpha = 0.10f),
-        contentColor = color,
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = if (compact) 8.dp else 12.dp)) {
-            Text(
-                text = when (result) {
-                    is PluginResult.Failure -> stringResource(R.string.status_failed) + " - [" + result.errorCode + "]"
-                    is PluginResult.Success -> stringResource(R.string.status_success)
-                },
-                style = MaterialTheme.typography.labelLarge,
-            )
-            Text(
-                result.message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = if (compact) 1 else 4,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!compact) {
-                Text(
-                    stringResource(R.string.plugin_took, result.durationMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        Box(
+            Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(color),
+        )
+        Text(
+            text = when (result) {
+                is PluginResult.Failure -> stringResource(R.string.status_failed) + " - [" + result.errorCode + "]  " + result.message
+                is PluginResult.Success -> stringResource(R.string.status_success) + "  " + result.message
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -405,6 +280,7 @@ private fun SchedulePill(schedule: Schedule) {
         Row(
             Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             Icon(
                 Icons.Outlined.Schedule,
@@ -412,7 +288,6 @@ private fun SchedulePill(schedule: Schedule) {
                 modifier = Modifier.size(12.dp),
                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
             )
-            Spacer(Modifier.width(5.dp))
             Text(
                 ScheduleFormatter.summary(context, schedule),
                 style = MaterialTheme.typography.labelSmall,
@@ -420,45 +295,6 @@ private fun SchedulePill(schedule: Schedule) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-        }
-    }
-}
-
-/** When it will next happen, and how the last one went. */
-@Composable
-private fun ScheduleSummary(schedule: Schedule) {
-    val context = LocalContext.current
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Row {
-                Text(
-                    stringResource(R.string.schedule_next_run),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    ScheduleFormatter.nextRun(context, schedule),
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-            Row {
-                Text(
-                    stringResource(R.string.schedule_last_run),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    ScheduleFormatter.lastRun(context, schedule),
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
         }
     }
 }

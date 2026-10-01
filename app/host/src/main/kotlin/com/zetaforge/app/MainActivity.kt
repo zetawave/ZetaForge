@@ -179,7 +179,6 @@ class MainActivity : ComponentActivity() {
                         onClearLogs = viewModel::clearLogs,
                         onStopRun = viewModel::stopRun,
                         onQueryChange = viewModel::setQuery,
-                        onToggleCard = { viewModel.togglePluginExpanded(it.id) },
                         onSettings = viewModel::openSettings,
                         onSettingChange = viewModel::updateSetting,
                         onSettingsAction = viewModel::runSettingsAction,
