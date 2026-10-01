@@ -59,6 +59,8 @@ class PluginExecutionService : Service() {
      * foreground service is started with. See [startForegroundCompat].
      */
     private var needsLocation = false
+    private var needsCamera = false
+    private var needsMicrophone = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -80,6 +82,8 @@ class PluginExecutionService : Service() {
                 val pluginId = intent.getStringExtra(EXTRA_PLUGIN_ID)
                 needsLocation = intent.getBooleanExtra(EXTRA_NEEDS_LOCATION, false) ||
                     pluginId?.let { declaresLocation(it) } == true
+                needsCamera = intent.getBooleanExtra(EXTRA_NEEDS_CAMERA, false)
+                needsMicrophone = intent.getBooleanExtra(EXTRA_NEEDS_MICROPHONE, false)
                 startForegroundCompat(ZetaNotifications.running(this, ZetaTaskCenter.current.value, scheduled, stopIntent()))
                 observeTask()
                 pluginId?.let { execute(it) }
@@ -91,6 +95,8 @@ class PluginExecutionService : Service() {
                 // the plugin id is known).
                 scheduled = false
                 needsLocation = intent?.getBooleanExtra(EXTRA_NEEDS_LOCATION, false) ?: false
+                needsCamera = intent?.getBooleanExtra(EXTRA_NEEDS_CAMERA, false) ?: false
+                needsMicrophone = intent?.getBooleanExtra(EXTRA_NEEDS_MICROPHONE, false) ?: false
                 startForegroundCompat(ZetaNotifications.running(this, ZetaTaskCenter.current.value, false, stopIntent()))
                 observeTask()
                 return START_NOT_STICKY
@@ -258,17 +264,29 @@ class PluginExecutionService : Service() {
             startForeground(ZetaNotifications.ID_RUNNING, notification)
             return
         }
-        val type = if (needsLocation && hasLocationPermission()) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-        } else {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        var type = 0
+        if (needsLocation && hasLocationPermission()) {
+            type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
         }
+        if (needsCamera && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && hasCameraPermission()) {
+            type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+        }
+        if (needsMicrophone && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && hasMicrophonePermission()) {
+            type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        }
+        if (type == 0) type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         startForeground(ZetaNotifications.ID_RUNNING, notification, type)
     }
 
     private fun hasLocationPermission(): Boolean =
         checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun hasCameraPermission(): Boolean =
+        checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+
+    private fun hasMicrophonePermission(): Boolean =
+        checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     /**
      * Whether the plugin about to run declares a location permission.
@@ -291,6 +309,8 @@ class PluginExecutionService : Service() {
         private const val EXTRA_PLUGIN_ID = "pluginId"
         private const val EXTRA_SCHEDULED = "scheduled"
         private const val EXTRA_NEEDS_LOCATION = "needsLocation"
+        private const val EXTRA_NEEDS_CAMERA = "needsCamera"
+        private const val EXTRA_NEEDS_MICROPHONE = "needsMicrophone"
 
         /** How long to wait for a run to be published before giving up. */
         private const val STARTUP_GRACE_MS = 20_000L
@@ -301,23 +321,38 @@ class PluginExecutionService : Service() {
          * @param needsLocation the run reads the device position, so the
          *   service has to be typed `location` rather than `dataSync`.
          */
-        fun start(context: Context, needsLocation: Boolean = false) {
+        fun start(
+            context: Context,
+            needsLocation: Boolean = false,
+            needsCamera: Boolean = false,
+            needsMicrophone: Boolean = false,
+        ) {
             launch(
                 context,
                 Intent(context, PluginExecutionService::class.java)
-                    .putExtra(EXTRA_NEEDS_LOCATION, needsLocation),
+                    .putExtra(EXTRA_NEEDS_LOCATION, needsLocation)
+                    .putExtra(EXTRA_NEEDS_CAMERA, needsCamera)
+                    .putExtra(EXTRA_NEEDS_MICROPHONE, needsMicrophone),
             )
         }
 
         /** Started from the UI, with the service running the plugin. */
-        fun runManual(context: Context, pluginId: String, needsLocation: Boolean = false) {
+        fun runManual(
+            context: Context,
+            pluginId: String,
+            needsLocation: Boolean = false,
+            needsCamera: Boolean = false,
+            needsMicrophone: Boolean = false,
+        ) {
             launch(
                 context,
                 Intent(context, PluginExecutionService::class.java)
                     .setAction(ACTION_RUN)
                     .putExtra(EXTRA_PLUGIN_ID, pluginId)
                     .putExtra(EXTRA_SCHEDULED, false)
-                    .putExtra(EXTRA_NEEDS_LOCATION, needsLocation),
+                    .putExtra(EXTRA_NEEDS_LOCATION, needsLocation)
+                    .putExtra(EXTRA_NEEDS_CAMERA, needsCamera)
+                    .putExtra(EXTRA_NEEDS_MICROPHONE, needsMicrophone),
             )
         }
 

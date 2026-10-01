@@ -1,5 +1,6 @@
 package com.zetaforge.app.ui.screen
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -113,6 +114,8 @@ class PluginScreenActivity : ComponentActivity() {
      * the time the service asks it has about five seconds to answer.
      */
     private var declaresLocation = false
+    private var declaresCamera = false
+    private var declaresMicrophone = false
 
     /** Owned by the Host so a plugin never touches an Activity result. */
     private lateinit var pickLauncher: ActivityResultLauncher<Array<String>>
@@ -198,6 +201,10 @@ class PluginScreenActivity : ComponentActivity() {
                 screen = result.plugin
                 declaresLocation = result.entry.installed.manifest.permissions
                     .any { it.name.endsWith("_LOCATION") }
+                declaresCamera = result.entry.installed.manifest.permissions
+                    .any { it.name == Manifest.permission.CAMERA }
+                declaresMicrophone = result.entry.installed.manifest.permissions
+                    .any { it.name == Manifest.permission.RECORD_AUDIO }
                 setTitle(result.entry.installed.displayName)
                 pluginName = result.entry.installed.displayName
                 settingsSnapshot = runtime.settings.toBundle(
@@ -514,6 +521,8 @@ class PluginScreenActivity : ComponentActivity() {
                 context = applicationContext,
                 pluginId = this@PluginScreenActivity.pluginId,
                 needsLocation = declaresLocation,
+                needsCamera = declaresCamera,
+                needsMicrophone = declaresMicrophone,
             )
             return true
         }

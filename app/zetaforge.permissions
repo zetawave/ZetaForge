@@ -76,6 +76,8 @@ android.permission.WRITE_CALENDAR
 android.permission.POST_NOTIFICATIONS
 android.permission.FOREGROUND_SERVICE
 android.permission.FOREGROUND_SERVICE_DATA_SYNC
+android.permission.FOREGROUND_SERVICE_CAMERA
+android.permission.FOREGROUND_SERVICE_MICROPHONE
 # From API 34 a foreground service that reads the location must say so, and a
 # `location` service is exempt from the ~6 h daily budget `dataSync` gets.
 android.permission.FOREGROUND_SERVICE_LOCATION
